@@ -111,16 +111,7 @@ export function CannedResponsesManager({ initialResponses }: Props) {
 
   return (
     <section className="bg-card rounded-xl border border-border shadow-soft p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-base font-semibold text-foreground flex items-center gap-2">
-            <ChatTextIcon className="size-5" />
-            Canned Responses
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Reusable reply templates any agent can insert into a ticket reply.
-          </p>
-        </div>
+      <div className="flex items-center justify-end">
         <Button
           className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-md gap-1.5"
           onClick={openAdd}

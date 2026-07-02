@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DeletableTicketAttachments } from "@/components/common/deletable-ticket-attachments";
 import { RichTextContent } from "@/components/common/rich-text-content";
+import { ScrollToBottomOnMount } from "@/components/common/scroll-to-bottom-on-mount";
 import { ADMIN_ROLE } from "@/config/platform";
 import { user } from "@/db/schema/auth";
 import {
@@ -22,6 +23,7 @@ import {
   getTicketStatuses,
 } from "@/lib/ticket-config";
 import { COLOR_BADGE, formatTicketDateTime } from "@/lib/tickets";
+import { getInitials } from "@/lib/utils";
 import { AgentReplyForm } from "./_components/agent-reply-form";
 import { TicketInfoSidebar } from "./_components/ticket-info-sidebar";
 
@@ -160,7 +162,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
             <div className="max-w-[85%] bg-accent rounded-xl border border-border p-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="size-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium shrink-0">
-                  {ticket.customerName[0]?.toUpperCase()}
+                  {getInitials(ticket.customerName)}
                 </div>
                 <div className="min-w-0">
                   <span className="text-sm font-medium text-foreground">
@@ -221,7 +223,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
                           : "bg-stone text-white"
                       }`}
                     >
-                      {comment.authorName[0]?.toUpperCase()}
+                      {getInitials(comment.authorName)}
                     </div>
                     <span className="text-sm font-medium text-foreground">
                       {comment.authorName}
@@ -270,10 +272,12 @@ export default async function AgentTicketDetailPage({ params }: Props) {
               />
             </div>
           )}
+
+          <ScrollToBottomOnMount />
         </div>
 
         {/* ── Right sidebar ── */}
-        <div className="w-full lg:w-72 shrink-0">
+        <div className="w-full lg:w-72 shrink-0 lg:sticky lg:top-6 lg:self-start">
           <TicketInfoSidebar
             activity={activity}
             agents={agents}

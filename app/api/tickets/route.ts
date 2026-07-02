@@ -1,11 +1,15 @@
 import { createId } from "@paralleldrive/cuid2";
+import { and, eq, or } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { ticketActivity, ticketAttachments, tickets } from "@/db/schema";
+import { ADMIN_ROLE, AGENT_ROLE } from "@/config/platform";
+import { ticketActivity, ticketAttachments, tickets, user } from "@/db/schema";
 import { db } from "@/lib/db";
 import { enqueueEmail } from "@/lib/email";
 import { ticketCreatedTemplate } from "@/lib/email/templates/ticket-created";
 import { env } from "@/lib/env";
+import { createNotifications } from "@/lib/notifications";
+import { publishPushToUsers } from "@/lib/push";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { storage } from "@/lib/storage";
 import {
@@ -203,6 +207,34 @@ export async function POST(request: NextRequest) {
         })
       )
       .catch((err) => console.error("[ticket.created email]", err));
+
+    // Notify agents in-app + push — a brand-new ticket has no assigned
+    // agent yet, so every active agent/admin gets pinged.
+    const agents = await db
+      .select({ id: user.id })
+      .from(user)
+      .where(
+        and(
+          or(eq(user.role, AGENT_ROLE), eq(user.role, ADMIN_ROLE)),
+          eq(user.banned, false)
+        )
+      );
+    const recipientIds = agents.map((a) => a.id);
+    const notifTitle = `New ticket #${inserted.ticketNumber} from ${name}`;
+
+    await createNotifications(recipientIds, {
+      type: "ticket_created",
+      title: notifTitle,
+      body: subject,
+      ticketId,
+      ticketNumber: inserted.ticketNumber,
+    }).catch((err) => console.error("[notification.ticket_created]", err));
+
+    await publishPushToUsers(recipientIds, {
+      title: notifTitle,
+      body: subject,
+      deepLink: `${env.NEXT_PUBLIC_APP_URL}/tickets/${ticketId}`,
+    }).catch((err) => console.error("[push.ticket_created]", err));
 
     return NextResponse.json(
       { ticketNumber: inserted.ticketNumber },

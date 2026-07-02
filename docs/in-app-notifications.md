@@ -7,6 +7,7 @@ attention. Notifications appear in the bell menu in the top bar, with an unread 
 
 | Event | Type | Recipients |
 |-------|------|------------|
+| New ticket submitted | `ticket_created` | All active (non-banned) agents and admins — a brand-new ticket has no assigned agent yet |
 | Customer replied to a ticket | `customer_replied` | Assigned agent if the ticket is assigned; otherwise all active (non-banned) agents and admins |
 
 > This zero-config routing means a solo self-hoster always gets the reply, teams only
@@ -77,7 +78,7 @@ falls back to the in-app bell with zero setup.
 | Token auth endpoint | `app/api/notifications/beams-auth/route.ts` — issues a Beams device token, only for the signed-in agent's own id |
 | Service worker | `public/service-worker.js` — imports the Beams SW (handles push while closed) |
 | Client registration | `components/agent/push-init.tsx` — mounted in the agent/admin layouts; requests permission and binds the device to the agent's user id |
-| Trigger | `comments` route calls `publishPushToUsers(...)` right after `createNotifications(...)` |
+| Trigger | `tickets` route (new ticket) and `comments` route (customer reply) each call `publishPushToUsers(...)` right after `createNotifications(...)` |
 
 - Uses Beams **"Authenticated Users"** mode — devices are associated with the agent's
   user id, so the same routing (assigned agent / all agents) applies to push.

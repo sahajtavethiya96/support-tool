@@ -20,6 +20,7 @@ import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
 import { getTicketCategories, getTicketStatuses } from "@/lib/ticket-config";
 import { COLOR_BADGE } from "@/lib/tickets";
+import { getInitials } from "@/lib/utils";
 import { ReplyForm } from "./reply-form";
 import { TicketActions } from "./ticket-actions";
 
@@ -267,7 +268,7 @@ export default async function TicketDetailPage({
                   </span>
                 </div>
                 <div className="size-7 rounded-full bg-bark text-cream flex items-center justify-center text-xs font-medium shrink-0 ml-auto">
-                  {ticket.customerName[0]?.toUpperCase()}
+                  {getInitials(ticket.customerName)}
                 </div>
               </div>
               <p className="text-sm text-bark whitespace-pre-wrap leading-relaxed">
@@ -327,7 +328,7 @@ export default async function TicketDetailPage({
                         </div>
                         {!isAgent && (
                           <div className="size-7 rounded-full bg-bark text-cream flex items-center justify-center text-xs font-medium shrink-0">
-                            {comment.authorName[0]?.toUpperCase()}
+                            {getInitials(comment.authorName)}
                           </div>
                         )}
                       </div>

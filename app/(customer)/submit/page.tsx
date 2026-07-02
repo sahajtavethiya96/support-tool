@@ -6,17 +6,19 @@ import {
   LockSimpleIcon,
   PaperclipIcon,
   TicketIcon,
+  UploadSimpleIcon,
   XIcon,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { SearchableSelect } from "@/components/common/searchable-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PRODUCT_NAME } from "@/config/platform";
+import { cn } from "@/lib/utils";
 
 const CATEGORIES = [
   { value: "bug", label: "Bug" },
@@ -46,6 +48,15 @@ interface FormErrors {
   subject?: string;
 }
 
+// Top-to-bottom field order, used to find + scroll to the first invalid field.
+const FIELD_ORDER: (keyof FormErrors)[] = [
+  "name",
+  "email",
+  "subject",
+  "category",
+  "description",
+];
+
 export default function SubmitPage() {
   const router = useRouter();
 
@@ -57,6 +68,23 @@ export default function SubmitPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const nameFieldRef = useRef<HTMLDivElement>(null);
+  const emailFieldRef = useRef<HTMLDivElement>(null);
+  const subjectFieldRef = useRef<HTMLDivElement>(null);
+  const categoryFieldRef = useRef<HTMLDivElement>(null);
+  const descriptionFieldRef = useRef<HTMLDivElement>(null);
+
+  const fieldRefs: Partial<
+    Record<keyof FormErrors, React.RefObject<HTMLDivElement | null>>
+  > = {
+    name: nameFieldRef,
+    email: emailFieldRef,
+    subject: subjectFieldRef,
+    category: categoryFieldRef,
+    description: descriptionFieldRef,
+  };
 
   function validate(): FormErrors {
     const e: FormErrors = {};
@@ -86,9 +114,12 @@ export default function SubmitPage() {
     return e;
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const selected = Array.from(e.target.files ?? []);
-    const combined = [...files, ...selected];
+  function clearError(field: keyof FormErrors) {
+    setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
+  }
+
+  function addFiles(newFiles: File[]) {
+    const combined = [...files, ...newFiles];
 
     if (combined.length > MAX_FILES) {
       setErrors((prev) => ({
@@ -117,9 +148,21 @@ export default function SubmitPage() {
     setErrors((prev) => ({ ...prev, attachments: undefined }));
   }
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    addFiles(selected);
+  }
+
   function removeFile(index: number) {
     setFiles((prev) => prev.filter((_, i) => i !== index));
     setErrors((prev) => ({ ...prev, attachments: undefined }));
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    setIsDragOver(false);
+    addFiles(Array.from(e.dataTransfer.files));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -127,6 +170,21 @@ export default function SubmitPage() {
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
+      const firstInvalidField = FIELD_ORDER.find((f) => validationErrors[f]);
+      const fieldRef = firstInvalidField
+        ? fieldRefs[firstInvalidField]
+        : undefined;
+      // Defer to the next paint so the just-set error text has already
+      // shifted layout — scrolling now would center against stale layout.
+      requestAnimationFrame(() => {
+        const container = fieldRef?.current;
+        container?.scrollIntoView({ behavior: "smooth", block: "center" });
+        // preventScroll: the browser's native focus-scroll is instant and
+        // would otherwise fight/override the smooth scroll above.
+        container
+          ?.querySelector<HTMLElement>("input, textarea, button")
+          ?.focus({ preventScroll: true });
+      });
       return;
     }
     setErrors({});
@@ -216,7 +274,7 @@ export default function SubmitPage() {
           <div className="bg-white rounded-xl border border-sand shadow-soft shadow-sm p-6 sm:p-8 space-y-5">
             {/* Name + Email */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
+              <div className="space-y-1.5" ref={nameFieldRef}>
                 <Label className="text-bark text-sm font-medium" htmlFor="name">
                   Full Name <span className="text-red-600">*</span>
                 </Label>
@@ -224,7 +282,10 @@ export default function SubmitPage() {
                   className=""
                   disabled={submitting}
                   id="name"
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    clearError("name");
+                  }}
                   placeholder="Jane Smith"
                   value={name}
                 />
@@ -233,7 +294,7 @@ export default function SubmitPage() {
                 )}
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1.5" ref={emailFieldRef}>
                 <Label
                   className="text-bark text-sm font-medium"
                   htmlFor="email"
@@ -244,7 +305,10 @@ export default function SubmitPage() {
                   className=""
                   disabled={submitting}
                   id="email"
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    clearError("email");
+                  }}
                   placeholder="jane@example.com"
                   type="email"
                   value={email}
@@ -256,7 +320,7 @@ export default function SubmitPage() {
             </div>
 
             {/* Subject */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" ref={subjectFieldRef}>
               <Label
                 className="text-bark text-sm font-medium"
                 htmlFor="subject"
@@ -268,7 +332,10 @@ export default function SubmitPage() {
                 disabled={submitting}
                 id="subject"
                 maxLength={200}
-                onChange={(e) => setSubject(e.target.value)}
+                onChange={(e) => {
+                  setSubject(e.target.value);
+                  clearError("subject");
+                }}
                 placeholder="Brief summary of your issue"
                 value={subject}
               />
@@ -283,13 +350,16 @@ export default function SubmitPage() {
             </div>
 
             {/* Category */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" ref={categoryFieldRef}>
               <Label className="text-bark text-sm font-medium">
                 Category <span className="text-red-600">*</span>
               </Label>
               <SearchableSelect
                 disabled={submitting}
-                onValueChange={setCategory}
+                onValueChange={(v) => {
+                  setCategory(v);
+                  clearError("category");
+                }}
                 options={CATEGORIES.map((c) => ({
                   value: c.value,
                   label: c.label,
@@ -305,7 +375,7 @@ export default function SubmitPage() {
             </div>
 
             {/* Description */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" ref={descriptionFieldRef}>
               <Label
                 className="text-bark text-sm font-medium"
                 htmlFor="description"
@@ -317,7 +387,10 @@ export default function SubmitPage() {
                 disabled={submitting}
                 id="description"
                 maxLength={5000}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => {
+                  setDescription(e.target.value);
+                  clearError("description");
+                }}
                 placeholder="Please describe your issue in detail…"
                 rows={5}
                 value={description}
@@ -367,10 +440,38 @@ export default function SubmitPage() {
                 </ul>
               )}
 
-              {files.length < MAX_FILES && (
-                <label className="flex items-center gap-2 text-sm text-stone hover:text-bark cursor-pointer w-fit">
-                  <PaperclipIcon className="size-4" />
-                  <span>Attach files</span>
+              {files.length < MAX_FILES ? (
+                // biome-ignore lint/a11y/noNoninteractiveElementInteractions: label is a native file-picker trigger (wraps the hidden input) with added drag-and-drop
+                <label
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors",
+                    submitting
+                      ? "cursor-not-allowed opacity-60"
+                      : "cursor-pointer",
+                    isDragOver
+                      ? "border-bark bg-cream/60"
+                      : "border-sand hover:border-stone hover:bg-cream/30"
+                  )}
+                  onDragLeave={() => setIsDragOver(false)}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (!submitting) {
+                      setIsDragOver(true);
+                    }
+                  }}
+                  onDrop={handleDrop}
+                >
+                  <UploadSimpleIcon className="size-5 text-stone" />
+                  <p className="text-sm text-bark">
+                    <span className="font-medium underline underline-offset-2">
+                      Click to upload
+                    </span>{" "}
+                    or drag and drop
+                  </p>
+                  <p className="text-xs text-stone">
+                    JPG, PNG, PDF, ZIP, TXT — max 10 MB each, up to {MAX_FILES}{" "}
+                    files
+                  </p>
                   <input
                     accept=".jpg,.jpeg,.png,.pdf,.zip,.txt"
                     className="sr-only"
@@ -380,11 +481,11 @@ export default function SubmitPage() {
                     type="file"
                   />
                 </label>
+              ) : (
+                <p className="text-xs text-stone">
+                  Attachment limit reached ({MAX_FILES}/{MAX_FILES}).
+                </p>
               )}
-              <p className="text-xs text-stone">
-                Up to {MAX_FILES} files — JPG, PNG, PDF, ZIP, TXT — max 10 MB
-                each.
-              </p>
               {errors.attachments && (
                 <p className="text-xs text-red-600">{errors.attachments}</p>
               )}

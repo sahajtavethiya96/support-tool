@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import type { TicketStatus } from "@/lib/ticket-config";
 import { COLOR_BADGE, formatTicketDate } from "@/lib/tickets";
+import { getInitials } from "@/lib/utils";
 
 interface Row {
   assignedAgentId: string | null;
@@ -41,15 +42,6 @@ interface Agent {
 interface ColorRow {
   color: string;
   label: string;
-}
-
-/** First letters of the first two words, e.g. "Sahaj Tavethiya" → "ST". */
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
-  return name.trim().slice(0, 2).toUpperCase();
 }
 
 export function TicketsTable({

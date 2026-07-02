@@ -15,8 +15,9 @@ import {
 } from "@phosphor-icons/react";
 import Placeholder from "@tiptap/extension-placeholder";
 import { type Editor, EditorContent, useEditor } from "@tiptap/react";
-import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { SuggestionPluginKey } from "@tiptap/suggestion";
+import type { ReactNode, Ref } from "react";
+import { useEffect, useImperativeHandle, useMemo, useState } from "react";
 import {
   Popover,
   PopoverContent,
@@ -35,13 +36,22 @@ export interface CannedResponseOption {
   title: string;
 }
 
+export interface RichTextEditorHandle {
+  focus: () => void;
+}
+
 interface Props {
   /** When provided (agent replies only), shows a toolbar button to insert a saved reply template. */
   cannedResponses?: CannedResponseOption[];
   className?: string;
   disabled?: boolean;
   onChange: (json: string) => void;
+  /** When provided, pasting or dropping files onto the editor hands them off here instead of inserting them into the document (there's no image extension — files become attachments, not embedded content). */
+  onFilesDropped?: (files: File[]) => void;
+  /** When provided, Enter sends (Shift+Enter still inserts a newline) — pass this on chat-style reply composers, not on template editors like canned responses. */
+  onSubmit?: () => void;
   placeholder?: string;
+  ref?: Ref<RichTextEditorHandle>;
   /** Visual accent — "warning" tints the frame amber (agent internal notes). */
   tone?: "default" | "warning";
   value: string;
@@ -271,12 +281,17 @@ function Toolbar({
 export function RichTextEditor({
   value,
   onChange,
+  onFilesDropped,
+  onSubmit,
   placeholder = "Write a reply…",
   disabled = false,
   tone = "default",
   className,
   cannedResponses,
+  ref,
 }: Props) {
+  const [isDragOver, setIsDragOver] = useState(false);
+
   const editor = useEditor({
     extensions: [
       ...baseRichTextExtensions(),
@@ -289,9 +304,51 @@ export function RichTextEditor({
       attributes: {
         class: "tiptap-content focus:outline-none min-h-[96px] px-4 py-3",
       },
+      handleKeyDown: (view, event) => {
+        if (
+          !onSubmit ||
+          event.key !== "Enter" ||
+          event.shiftKey ||
+          event.isComposing
+        ) {
+          return false;
+        }
+        // Let the "/" command menu handle Enter (select item) while it's open.
+        if (SuggestionPluginKey.getState(view.state)?.active) {
+          return false;
+        }
+        onSubmit();
+        return true;
+      },
+      handlePaste: (_view, event) => {
+        const files = Array.from(event.clipboardData?.files ?? []);
+        if (!onFilesDropped || files.length === 0) {
+          return false;
+        }
+        event.preventDefault();
+        onFilesDropped(files);
+        return true;
+      },
+      handleDrop: (_view, event) => {
+        const files = Array.from(event.dataTransfer?.files ?? []);
+        if (!onFilesDropped || files.length === 0) {
+          return false;
+        }
+        event.preventDefault();
+        onFilesDropped(files);
+        return true;
+      },
     },
     immediatelyRender: false,
   });
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => editor?.commands.focus("end"),
+    }),
+    [editor]
+  );
 
   // Reflect external resets (e.g. parent clears the field after a successful send).
   useEffect(() => {
@@ -318,15 +375,26 @@ export function RichTextEditor({
   }
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: drag-and-drop file target, not an interactive control — the toolbar buttons and editable content inside remain independently keyboard-accessible
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: see above
     <div
       className={cn(
-        "rounded-md border bg-card overflow-hidden focus-within:ring-1 transition-colors",
+        "rounded-md border bg-card overflow-hidden transition-[color,border-color,box-shadow]",
         tone === "warning"
-          ? "border-amber-200 bg-amber-50 focus-within:border-amber-400 focus-within:ring-amber-400"
-          : "border-input focus-within:border-primary focus-within:ring-ring",
+          ? "border-amber-200 bg-amber-50 focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-400/20"
+          : "border-input focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20",
+        isDragOver && onFilesDropped && "ring-2 ring-primary border-primary",
         disabled && "opacity-60",
         className
       )}
+      onDragLeave={() => setIsDragOver(false)}
+      onDragOver={(e) => {
+        if (onFilesDropped) {
+          e.preventDefault();
+          setIsDragOver(true);
+        }
+      }}
+      onDrop={() => setIsDragOver(false)}
     >
       <Toolbar cannedResponses={cannedResponses} editor={editor} tone={tone} />
       <EditorContent editor={editor} />

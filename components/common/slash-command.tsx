@@ -207,7 +207,12 @@ export const SlashCommand = Extension.create({
           if (range.from === 0) {
             return true;
           }
-          const before = state.doc.textBetween(range.from - 1, range.from, "\n", "\n");
+          const before = state.doc.textBetween(
+            range.from - 1,
+            range.from,
+            "\n",
+            "\n"
+          );
           return before === "" || before === " " || before === "\n";
         },
         items: ({ query }) =>

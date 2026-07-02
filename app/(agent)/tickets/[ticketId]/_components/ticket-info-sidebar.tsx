@@ -20,6 +20,7 @@ import type {
   TicketStatus,
 } from "@/lib/ticket-config";
 import { COLOR_BADGE, formatTicketDateTime } from "@/lib/tickets";
+import { getInitials } from "@/lib/utils";
 
 type Agent = { id: string; name: string | null; email: string };
 
@@ -350,7 +351,7 @@ export function TicketInfoSidebar({
         </h3>
         <div className="flex items-start gap-2.5">
           <div className="size-7 rounded-full bg-accent border border-border flex items-center justify-center text-xs font-medium text-foreground shrink-0">
-            {ticket.customerName[0]?.toUpperCase()}
+            {getInitials(ticket.customerName)}
           </div>
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground truncate">

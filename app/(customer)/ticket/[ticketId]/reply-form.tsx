@@ -4,7 +4,10 @@ import { PaperclipIcon, XIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { RichTextEditor } from "@/components/common/rich-text-editor";
+import {
+  RichTextEditor,
+  type RichTextEditorHandle,
+} from "@/components/common/rich-text-editor";
 import { Button } from "@/components/ui/button";
 import { isRichTextEmpty } from "@/lib/rich-text";
 
@@ -26,6 +29,8 @@ interface Props {
 export function ReplyForm({ ticketId, token, totalAttachments }: Props) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const editorRef = useRef<RichTextEditorHandle>(null);
 
   const [content, setContent] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -34,13 +39,8 @@ export function ReplyForm({ ticketId, token, totalAttachments }: Props) {
 
   const maxNewFiles = Math.max(0, 5 - totalAttachments);
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const selected = Array.from(e.target.files ?? []);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-
-    const combined = [...files, ...selected];
+  function addFiles(newFiles: File[]) {
+    const combined = [...files, ...newFiles];
     if (combined.length > maxNewFiles) {
       setError(`You can only add ${maxNewFiles} more file(s) to this ticket.`);
       return;
@@ -59,9 +59,23 @@ export function ReplyForm({ ticketId, token, totalAttachments }: Props) {
     setError(null);
   }
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? []);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    addFiles(selected);
+  }
+
   function removeFile(index: number) {
     setFiles((prev) => prev.filter((_, i) => i !== index));
     setError(null);
+  }
+
+  function handleEnterSubmit() {
+    if (!submitting) {
+      formRef.current?.requestSubmit();
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -94,6 +108,7 @@ export function ReplyForm({ ticketId, token, totalAttachments }: Props) {
 
       setContent("");
       setFiles([]);
+      editorRef.current?.focus();
       toast.success("Reply sent.");
       router.refresh();
     } catch {
@@ -108,13 +123,17 @@ export function ReplyForm({ ticketId, token, totalAttachments }: Props) {
     <form
       className="bg-white rounded-xl border border-sand shadow-soft p-6 space-y-4"
       onSubmit={handleSubmit}
+      ref={formRef}
     >
       <h2 className="text-sm font-medium text-bark">Send a Reply</h2>
 
       <RichTextEditor
         disabled={submitting}
         onChange={setContent}
+        onFilesDropped={maxNewFiles > 0 ? addFiles : undefined}
+        onSubmit={handleEnterSubmit}
         placeholder="Write your reply…"
+        ref={editorRef}
         value={content}
       />
 

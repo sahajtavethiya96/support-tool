@@ -28,16 +28,6 @@ export default async function AuditLogPage({ searchParams }: Props) {
 
   return (
     <div className="p-4 lg:p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <ClockCounterClockwiseIcon className="size-5 text-foreground" />
-        <div>
-          <h1 className="text-base font-semibold text-foreground">Audit Log</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            A record of account-level and administrative actions.
-          </p>
-        </div>
-      </div>
-
       <AuditLogFilters />
 
       <Suspense

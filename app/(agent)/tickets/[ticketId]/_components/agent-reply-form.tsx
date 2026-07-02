@@ -9,7 +9,10 @@ import {
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { RichTextEditor } from "@/components/common/rich-text-editor";
+import {
+  RichTextEditor,
+  type RichTextEditorHandle,
+} from "@/components/common/rich-text-editor";
 import { Button } from "@/components/ui/button";
 import { isRichTextEmpty } from "@/lib/rich-text";
 
@@ -35,6 +38,8 @@ export function AgentReplyForm({
 }: Props) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const editorRef = useRef<RichTextEditorHandle>(null);
 
   const [isInternal, setIsInternal] = useState(false);
   const [content, setContent] = useState("");
@@ -44,12 +49,8 @@ export function AgentReplyForm({
 
   const maxNewFiles = Math.max(0, 5 - totalAttachments);
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const selected = Array.from(e.target.files ?? []);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-    const combined = [...files, ...selected];
+  function addFiles(newFiles: File[]) {
+    const combined = [...files, ...newFiles];
     if (combined.length > maxNewFiles) {
       setError(`Only ${maxNewFiles} more file(s) allowed.`);
       return;
@@ -68,9 +69,23 @@ export function AgentReplyForm({
     setError(null);
   }
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? []);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    addFiles(selected);
+  }
+
   function removeFile(index: number) {
     setFiles((prev) => prev.filter((_, i) => i !== index));
     setError(null);
+  }
+
+  function handleEnterSubmit() {
+    if (!submitting) {
+      formRef.current?.requestSubmit();
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -100,6 +115,7 @@ export function AgentReplyForm({
       }
       setContent("");
       setFiles([]);
+      editorRef.current?.focus();
       toast.success(
         isInternal ? "Internal note added." : "Reply sent to customer."
       );
@@ -113,7 +129,7 @@ export function AgentReplyForm({
   }
 
   return (
-    <form className="space-y-3" onSubmit={handleSubmit}>
+    <form className="space-y-3" onSubmit={handleSubmit} ref={formRef}>
       {/* Toggle: Reply / Internal Note */}
       <div className="flex gap-1 p-1 bg-accent rounded-lg border border-border w-fit">
         <button
@@ -146,11 +162,14 @@ export function AgentReplyForm({
         cannedResponses={cannedResponses}
         disabled={submitting}
         onChange={setContent}
+        onFilesDropped={maxNewFiles > 0 ? addFiles : undefined}
+        onSubmit={handleEnterSubmit}
         placeholder={
           isInternal
             ? "Write an internal note (only visible to agents)…"
             : "Write a reply to the customer…"
         }
+        ref={editorRef}
         tone={isInternal ? "warning" : "default"}
         value={content}
       />

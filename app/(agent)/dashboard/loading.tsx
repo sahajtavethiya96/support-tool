@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DashboardLoading() {
   return (
-    <div className="p-8 space-y-8 max-w-6xl">
+    <div className="p-8 space-y-8">
       {/* Header */}
       <div className="space-y-1">
         <Skeleton className="h-7 w-32" />

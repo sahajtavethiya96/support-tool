@@ -192,7 +192,7 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <div className="p-8 space-y-8 max-w-6xl">
+    <div className="p-8 space-y-8">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">Support queue overview.</p>
