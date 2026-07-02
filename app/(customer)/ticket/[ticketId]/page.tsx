@@ -23,6 +23,7 @@ import { COLOR_BADGE } from "@/lib/tickets";
 import { getInitials } from "@/lib/utils";
 import { ReplyForm } from "./reply-form";
 import { TicketActions } from "./ticket-actions";
+import { TicketRealtime } from "./ticket-realtime";
 
 interface Props {
   params: Promise<{ ticketId: string }>;
@@ -142,6 +143,7 @@ export default async function TicketDetailPage({
 
   return (
     <div className="min-h-screen bg-public">
+      <TicketRealtime ticketId={ticket.id} token={token} />
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-sand sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">

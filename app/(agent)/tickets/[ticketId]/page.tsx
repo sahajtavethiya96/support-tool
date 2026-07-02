@@ -2,6 +2,7 @@ import { ArrowLeftIcon, LockSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { TicketDetailRealtime } from "@/components/agent/ticket-detail-realtime";
 import { DeletableTicketAttachments } from "@/components/common/deletable-ticket-attachments";
 import { RichTextContent } from "@/components/common/rich-text-content";
 import { ScrollToBottomOnMount } from "@/components/common/scroll-to-bottom-on-mount";
@@ -110,6 +111,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
 
   return (
     <div className="p-4 lg:p-6">
+      <TicketDetailRealtime ticketId={ticket.id} />
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 mb-5">
         <Link

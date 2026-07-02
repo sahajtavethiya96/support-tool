@@ -29,6 +29,7 @@ Below is the decision made per item and where its plan lives.
 | 12 | Email/password login + per-method sign-in toggles | **Built** — see `docs/authentication.md` § 2 | — |
 | 13 | Password reset (self-service + admin-initiated) | **Deferred** — gap found while building #12 | [08-password-reset.md](./08-password-reset.md) |
 | 14 | Open-source readiness (LICENSE, `package.json` metadata, CI, templates) | **Deferred** — prioritized functionality first | [09-open-source-readiness.md](./09-open-source-readiness.md) |
+| 15 | Real-time ticket list + live ticket detail updates | **Build** — Pusher Channels, no polling fallback (explicit decision) | [10-realtime-updates.md](./10-realtime-updates.md) |
 
 ### A note on #1 — "already implemented"?
 

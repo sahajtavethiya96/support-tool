@@ -101,10 +101,20 @@ Open `http://localhost:3000`.
 | `EMAIL_WEBHOOK_SECRET` | No | Shared secret for SMTP provider delivery webhooks |
 | `NEXT_PUBLIC_PUSHER_BEAMS_INSTANCE_ID` | No | Pusher Beams instance id — enables browser/OS push for agents (baked in at build time) |
 | `PUSHER_BEAMS_SECRET_KEY` | No | Pusher Beams secret key (server only) |
+| `PUSHER_APP_ID` | No | Pusher Channels app id — enables real-time ticket list + live ticket detail updates (server only) |
+| `NEXT_PUBLIC_PUSHER_KEY` | No | Pusher Channels app key (baked in at build time) |
+| `PUSHER_SECRET` | No | Pusher Channels secret (server only) |
+| `NEXT_PUBLIC_PUSHER_CLUSTER` | No | Pusher Channels cluster, e.g. `us2`, `eu` (baked in at build time) |
 
 > **Agent notifications:** customer replies notify agents **in-app** via the notification
 > bell (no config needed). Configure the two `*_PUSHER_BEAMS_*` vars to also send OS-level
 > push that works when the app is closed. See [docs/in-app-notifications.md](docs/in-app-notifications.md).
+>
+> **Real-time updates:** configure the four `PUSHER_*`/`NEXT_PUBLIC_PUSHER_*` Channels
+> vars above (a *different* Pusher product from Beams — create a separate "Channels" app
+> in the same dashboard) to make the agent ticket list and an open ticket detail page
+> update live, with no manual refresh. Without them, both pages work exactly as before.
+> See [docs/realtime-updates.md](docs/realtime-updates.md).
 
 ---
 
@@ -144,6 +154,15 @@ client bundle at build time, so pass it as a build arg, then set the secret at r
 ```bash
 docker compose build --build-arg NEXT_PUBLIC_PUSHER_BEAMS_INSTANCE_ID=your-instance-id
 # put PUSHER_BEAMS_SECRET_KEY in .env, then:
+docker compose up -d
+```
+
+**Enabling Pusher Channels (real-time updates) with Docker:** same idea, different
+build args — the key and cluster are also baked in at build time:
+
+```bash
+docker compose build --build-arg NEXT_PUBLIC_PUSHER_KEY=your-key --build-arg NEXT_PUBLIC_PUSHER_CLUSTER=us2
+# put PUSHER_APP_ID and PUSHER_SECRET in .env, then:
 docker compose up -d
 ```
 

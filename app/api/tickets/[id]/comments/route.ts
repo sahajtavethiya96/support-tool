@@ -18,6 +18,7 @@ import { env } from "@/lib/env";
 import { createNotifications } from "@/lib/notifications";
 import { publishPushToUsers } from "@/lib/push";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { publishTicketCommentCreated } from "@/lib/realtime";
 import { isRichTextEmpty, richTextToPlainText } from "@/lib/rich-text";
 import { storage } from "@/lib/storage";
 import { isClosedStatusSlug } from "@/lib/ticket-config";
@@ -77,42 +78,14 @@ export async function POST(
       }
     | undefined;
 
-  const session = await auth.api.getSession({ headers: request.headers });
-
-  if (
-    session?.user &&
-    (session.user.role === "agent" || session.user.role === "admin")
-  ) {
-    // Agent/admin comment
-    authorId = session.user.id;
-    authorName = session.user.name ?? session.user.email;
-    authorRole = session.user.role as "agent" | "admin";
-    isInternal = formData.get("isInternal") === "true";
-
-    const [ticket] = await db
-      .select({
-        status: tickets.status,
-        customerName: tickets.customerName,
-        customerEmail: tickets.customerEmail,
-        customerToken: tickets.customerToken,
-        ticketNumber: tickets.ticketNumber,
-        subject: tickets.subject,
-        assignedAgentId: tickets.assignedAgentId,
-      })
-      .from(tickets)
-      .where(eq(tickets.id, ticketId))
-      .limit(1);
-    if (!ticket) {
-      return NextResponse.json({ error: "Ticket not found." }, { status: 404 });
-    }
-    if (await isClosedStatusSlug(ticket.status)) {
-      return NextResponse.json(
-        { error: "Cannot comment on a closed ticket." },
-        { status: 400 }
-      );
-    }
-    ticketData = ticket;
-  } else if (token) {
+  // The two reply forms are mutually exclusive by construction: only the
+  // customer form ever sends `token`, only the agent form relies on a
+  // session. Check `token` FIRST and treat it as authoritative — otherwise a
+  // customer submitting from a browser that also happens to carry a valid
+  // agent session cookie (e.g. an agent testing their own portal in another
+  // tab of the same browser profile) would have their reply silently
+  // misattributed to that agent, since the session would otherwise win.
+  if (token) {
     const { allowed } = await checkRateLimit({
       action: "ticket_comment",
       key: getClientIp(request),
@@ -152,7 +125,46 @@ export async function POST(
     authorRole = "customer";
     ticketData = ticket;
   } else {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    const session = await auth.api.getSession({ headers: request.headers });
+
+    if (
+      !(
+        session?.user &&
+        (session.user.role === "agent" || session.user.role === "admin")
+      )
+    ) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    }
+
+    // Agent/admin comment
+    authorId = session.user.id;
+    authorName = session.user.name ?? session.user.email;
+    authorRole = session.user.role as "agent" | "admin";
+    isInternal = formData.get("isInternal") === "true";
+
+    const [ticket] = await db
+      .select({
+        status: tickets.status,
+        customerName: tickets.customerName,
+        customerEmail: tickets.customerEmail,
+        customerToken: tickets.customerToken,
+        ticketNumber: tickets.ticketNumber,
+        subject: tickets.subject,
+        assignedAgentId: tickets.assignedAgentId,
+      })
+      .from(tickets)
+      .where(eq(tickets.id, ticketId))
+      .limit(1);
+    if (!ticket) {
+      return NextResponse.json({ error: "Ticket not found." }, { status: 404 });
+    }
+    if (await isClosedStatusSlug(ticket.status)) {
+      return NextResponse.json(
+        { error: "Cannot comment on a closed ticket." },
+        { status: 400 }
+      );
+    }
+    ticketData = ticket;
   }
 
   // Check attachment count
@@ -269,6 +281,13 @@ export async function POST(
       action: isInternal ? "internal_note_added" : "comment_added",
       createdAt: now,
     });
+
+    // Live-refresh anyone currently viewing this ticket — any comment
+    // (reply or internal note, from any author), not just customer replies.
+    // No-op unless Pusher Channels is configured.
+    await publishTicketCommentCreated(ticketId).catch((err) =>
+      console.error("[realtime.comment_created]", err)
+    );
 
     // Notify customer when an agent posts a public reply
     if (!isInternal && authorRole !== "customer" && ticketData) {

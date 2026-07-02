@@ -25,6 +25,14 @@ ENV NEXT_PUBLIC_APP_URL=http://localhost:3000
 #   docker compose build --build-arg NEXT_PUBLIC_PUSHER_BEAMS_INSTANCE_ID=xxxxxxxx
 ARG NEXT_PUBLIC_PUSHER_BEAMS_INSTANCE_ID=""
 ENV NEXT_PUBLIC_PUSHER_BEAMS_INSTANCE_ID=$NEXT_PUBLIC_PUSHER_BEAMS_INSTANCE_ID
+# Optional: bake the Pusher Channels key/cluster into the client bundle (a
+# different Pusher product from Beams above — enables real-time ticket
+# updates). Pass with:
+#   docker compose build --build-arg NEXT_PUBLIC_PUSHER_KEY=xxxxxxxx --build-arg NEXT_PUBLIC_PUSHER_CLUSTER=us2
+ARG NEXT_PUBLIC_PUSHER_KEY=""
+ENV NEXT_PUBLIC_PUSHER_KEY=$NEXT_PUBLIC_PUSHER_KEY
+ARG NEXT_PUBLIC_PUSHER_CLUSTER=""
+ENV NEXT_PUBLIC_PUSHER_CLUSTER=$NEXT_PUBLIC_PUSHER_CLUSTER
 RUN pnpm build
 
 # ── Runtime image (serves app or runs worker / migrations) ────────────────────

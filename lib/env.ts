@@ -13,7 +13,10 @@ const envSchema = z.object({
     .enum(["development", "test", "production"])
     .default("development"),
   SMTP_HOST: optionalString,
-  SMTP_PORT: z.preprocess((v) => (v ? Number(v) : undefined), z.number().optional()),
+  SMTP_PORT: z.preprocess(
+    (v) => (v ? Number(v) : undefined),
+    z.number().optional()
+  ),
   SMTP_USER: optionalString,
   SMTP_PASS: optionalString,
   EMAIL_FROM: optionalString,
@@ -23,6 +26,12 @@ const envSchema = z.object({
   // Pusher Beams (optional) — browser/OS push for agent notifications.
   NEXT_PUBLIC_PUSHER_BEAMS_INSTANCE_ID: optionalString,
   PUSHER_BEAMS_SECRET_KEY: optionalString,
+  // Pusher Channels (optional) — real-time ticket list + live ticket detail
+  // updates. A different Pusher product from Beams above (pub/sub, not push).
+  PUSHER_APP_ID: optionalString,
+  NEXT_PUBLIC_PUSHER_KEY: optionalString,
+  PUSHER_SECRET: optionalString,
+  NEXT_PUBLIC_PUSHER_CLUSTER: optionalString,
 });
 
 const parsed = envSchema.safeParse(process.env);

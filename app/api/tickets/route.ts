@@ -11,6 +11,7 @@ import { env } from "@/lib/env";
 import { createNotifications } from "@/lib/notifications";
 import { publishPushToUsers } from "@/lib/push";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { publishTicketCreated } from "@/lib/realtime";
 import { storage } from "@/lib/storage";
 import {
   getDefaultPriority,
@@ -235,6 +236,12 @@ export async function POST(request: NextRequest) {
       body: subject,
       deepLink: `${env.NEXT_PUBLIC_APP_URL}/tickets/${ticketId}`,
     }).catch((err) => console.error("[push.ticket_created]", err));
+
+    // Live-refresh any agent currently viewing the ticket list (no-op unless
+    // Pusher Channels is configured).
+    await publishTicketCreated().catch((err) =>
+      console.error("[realtime.ticket_created]", err)
+    );
 
     return NextResponse.json(
       { ticketNumber: inserted.ticketNumber },

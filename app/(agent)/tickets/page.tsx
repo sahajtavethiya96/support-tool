@@ -2,6 +2,7 @@ import { TicketIcon } from "@phosphor-icons/react/dist/ssr";
 import { and, count, desc, eq, ilike, or } from "drizzle-orm";
 import Link from "next/link";
 import { Suspense } from "react";
+import { TicketsListRealtime } from "@/components/agent/tickets-list-realtime";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ADMIN_ROLE, AGENT_ROLE } from "@/config/platform";
@@ -50,6 +51,7 @@ export default async function TicketsPage({ searchParams }: Props) {
 
   return (
     <div className="p-6 space-y-5">
+      <TicketsListRealtime />
       <TicketFilters
         categories={categories}
         priorities={priorities}
