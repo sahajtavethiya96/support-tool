@@ -1,36 +1,48 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
+  ChatTextIcon,
+  ClockCounterClockwiseIcon,
+  PaintBrushIcon,
+  ShieldCheckIcon,
   SquaresFourIcon,
+  TagIcon,
   TicketIcon,
   UsersIcon,
-  ShieldCheckIcon,
-  PaintBrushIcon,
-  TagIcon,
 } from "@phosphor-icons/react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ADMIN_ROLE, PRODUCT_NAME } from "@/config/platform";
 import { SignOutButton } from "./sign-out-button";
 
 interface AgentSidebarProps {
-  userName: string;
   userEmail: string;
+  userName: string;
   userRole: string;
 }
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: SquaresFourIcon },
   { href: "/tickets", label: "All Tickets", icon: TicketIcon },
+  { href: "/canned-responses", label: "Canned Responses", icon: ChatTextIcon },
 ];
 
 const adminItems = [
   { href: "/admin/users", label: "Users", icon: UsersIcon },
   { href: "/admin/appearance", label: "Appearance", icon: PaintBrushIcon },
   { href: "/admin/ticket-config", label: "Ticket Config", icon: TagIcon },
+  {
+    href: "/admin/audit-log",
+    label: "Audit Log",
+    icon: ClockCounterClockwiseIcon,
+  },
 ];
 
-export function AgentSidebar({ userName, userEmail, userRole }: AgentSidebarProps) {
+export function AgentSidebar({
+  userName,
+  userEmail,
+  userRole,
+}: AgentSidebarProps) {
   const pathname = usePathname();
   const isAdmin = userRole === ADMIN_ROLE;
 
@@ -42,9 +54,12 @@ export function AgentSidebar({ userName, userEmail, userRole }: AgentSidebarProp
     <aside className="w-60 bg-sidebar h-full flex flex-col shrink-0">
       {/* Logo */}
       <div className="px-4 py-5 border-b border-sidebar-border">
-        <Link href="/tickets" className="flex items-center gap-2.5">
+        <Link className="flex items-center gap-2.5" href="/tickets">
           <div className="size-7 rounded-md bg-sidebar-accent flex items-center justify-center">
-            <TicketIcon className="size-4 text-sidebar-accent-foreground" weight="fill" />
+            <TicketIcon
+              className="size-4 text-sidebar-accent-foreground"
+              weight="fill"
+            />
           </div>
           <span className="font-semibold text-sidebar-accent-foreground text-sm">
             {PRODUCT_NAME}
@@ -56,13 +71,13 @@ export function AgentSidebar({ userName, userEmail, userRole }: AgentSidebarProp
       <nav className="flex-1 px-3 py-4 space-y-0.5">
         {navItems.map(({ href, label, icon: Icon }) => (
           <Link
-            key={href}
-            href={href}
             className={
               isActive(href)
                 ? "flex items-center gap-3 px-3 py-2 text-sm font-medium text-white bg-sidebar-accent rounded-md border-l-2 border-sidebar-primary"
                 : "flex items-center gap-3 px-3 py-2 text-sm text-white rounded-md hover:bg-sidebar-accent transition-colors"
             }
+            href={href}
+            key={href}
           >
             <Icon
               className="size-4 shrink-0"
@@ -82,13 +97,13 @@ export function AgentSidebar({ userName, userEmail, userRole }: AgentSidebarProp
             </div>
             {adminItems.map(({ href, label, icon: Icon }) => (
               <Link
-                key={href}
-                href={href}
                 className={
                   isActive(href)
                     ? "flex items-center gap-3 px-3 py-2 text-sm font-medium text-white bg-sidebar-accent rounded-md border-l-2 border-sidebar-primary"
                     : "flex items-center gap-3 px-3 py-2 text-sm text-white rounded-md hover:bg-sidebar-accent transition-colors"
                 }
+                href={href}
+                key={href}
               >
                 <Icon
                   className="size-4 shrink-0"
@@ -113,7 +128,9 @@ export function AgentSidebar({ userName, userEmail, userRole }: AgentSidebarProp
             <p className="text-xs font-medium text-sidebar-accent-foreground truncate">
               {userName}
             </p>
-            <p className="text-2xs text-sidebar-foreground truncate">{userEmail}</p>
+            <p className="text-2xs text-sidebar-foreground truncate">
+              {userEmail}
+            </p>
           </div>
           {isAdmin && (
             <ShieldCheckIcon className="size-3.5 text-sidebar-foreground shrink-0 ml-auto" />

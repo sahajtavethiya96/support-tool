@@ -1,18 +1,26 @@
 import { createId } from "@paralleldrive/cuid2";
 import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { ADMIN_ROLE } from "@/config/platform";
+import { ticketActivity, ticketAttachments, tickets } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { tickets, ticketActivity, ticketAttachments } from "@/db/schema";
-import { getTicketStatuses, getTicketCategories } from "@/lib/ticket-config";
-import { ADMIN_ROLE } from "@/config/platform";
 import { storage } from "@/lib/storage";
+import {
+  getTicketCategories,
+  getTicketPriorities,
+  getTicketStatuses,
+} from "@/lib/ticket-config";
 
 async function requireAgentSession(request: NextRequest) {
   const session = await auth.api.getSession({ headers: request.headers });
-  if (!session?.user) return null;
-  if (session.user.role !== "agent" && session.user.role !== "admin") return null;
+  if (!session?.user) {
+    return null;
+  }
+  if (session.user.role !== "agent" && session.user.role !== "admin") {
+    return null;
+  }
   return session;
 }
 
@@ -22,7 +30,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await requireAgentSession(request);
-  if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
 
   const { id } = await params;
   const [ticket] = await db
@@ -33,6 +43,7 @@ export async function GET(
       description: tickets.description,
       category: tickets.category,
       status: tickets.status,
+      priority: tickets.priority,
       customerName: tickets.customerName,
       customerEmail: tickets.customerEmail,
       assignedAgentId: tickets.assignedAgentId,
@@ -44,7 +55,9 @@ export async function GET(
     .where(eq(tickets.id, id))
     .limit(1);
 
-  if (!ticket) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if (!ticket) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
   return NextResponse.json(ticket);
 }
 
@@ -54,18 +67,24 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await requireAgentSession(request);
-  if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
 
   const { id: ticketId } = await params;
   let body: {
     status?: string;
     category?: string;
+    priority?: string;
     assignedAgentId?: string | null;
   } = {};
   try {
     body = (await request.json()) as typeof body;
   } catch {
-    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request body." },
+      { status: 400 }
+    );
   }
 
   const [ticket] = await db
@@ -73,7 +92,9 @@ export async function PATCH(
     .from(tickets)
     .where(eq(tickets.id, ticketId))
     .limit(1);
-  if (!ticket) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if (!ticket) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
 
   const actorId = session.user.id;
   const actorName = session.user.name ?? session.user.email;
@@ -141,6 +162,33 @@ export async function PATCH(
     changed = true;
   }
 
+  // Priority change
+  if (body.priority !== undefined && body.priority !== ticket.priority) {
+    const validPriorities = await getTicketPriorities();
+    if (!validPriorities.some((p) => p.slug === body.priority)) {
+      return NextResponse.json({ error: "Invalid priority." }, { status: 400 });
+    }
+    const previousPriority = ticket.priority;
+    const newPriority = body.priority;
+
+    await db
+      .update(tickets)
+      .set({ priority: newPriority, updatedAt: now })
+      .where(eq(tickets.id, ticketId));
+
+    await db.insert(ticketActivity).values({
+      id: createId(),
+      ticketId,
+      actorId,
+      actorName,
+      actorRole,
+      action: "priority_changed",
+      metadata: { from: previousPriority, to: newPriority },
+      createdAt: now,
+    });
+    changed = true;
+  }
+
   // Assignment change
   if ("assignedAgentId" in body) {
     const newAgentId = body.assignedAgentId ?? null;
@@ -184,7 +232,9 @@ export async function DELETE(
     .from(tickets)
     .where(eq(tickets.id, ticketId))
     .limit(1);
-  if (!ticket) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if (!ticket) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
 
   // Delete storage files before DB records
   const attachments = await db

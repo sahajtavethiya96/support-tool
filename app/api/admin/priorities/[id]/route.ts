@@ -1,0 +1,140 @@
+import { count, eq } from "drizzle-orm";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { ticketPriorities, tickets } from "@/db/schema";
+import { requireAdminFromRequest } from "@/lib/authz";
+import { db } from "@/lib/db";
+
+// PATCH — admin only
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    requireAdminFromRequest(request);
+  } catch (e) {
+    return e as Response;
+  }
+
+  const { id } = await params;
+
+  let body: {
+    label?: string;
+    color?: string;
+    sortOrder?: number;
+    isDefault?: boolean;
+  } = {};
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request body." },
+      { status: 400 }
+    );
+  }
+
+  const [existing] = await db
+    .select()
+    .from(ticketPriorities)
+    .where(eq(ticketPriorities.id, id))
+    .limit(1);
+  if (!existing) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  const now = new Date();
+
+  // If setting as default, unset current default first
+  if (body.isDefault === true && !existing.isDefault) {
+    await db
+      .update(ticketPriorities)
+      .set({ isDefault: false, updatedAt: now })
+      .where(eq(ticketPriorities.isDefault, true));
+  }
+
+  const updateData: Partial<typeof ticketPriorities.$inferInsert> & {
+    updatedAt: Date;
+  } = {
+    updatedAt: now,
+  };
+  if (body.label !== undefined) {
+    updateData.label = body.label.trim();
+  }
+  if (body.color !== undefined) {
+    updateData.color = body.color;
+  }
+  if (body.sortOrder !== undefined) {
+    updateData.sortOrder = body.sortOrder;
+  }
+  if (body.isDefault !== undefined) {
+    updateData.isDefault = body.isDefault;
+  }
+
+  const [updated] = await db
+    .update(ticketPriorities)
+    .set(updateData)
+    .where(eq(ticketPriorities.id, id))
+    .returning();
+
+  return NextResponse.json(updated);
+}
+
+// DELETE — admin only
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    requireAdminFromRequest(request);
+  } catch (e) {
+    return e as Response;
+  }
+
+  const { id } = await params;
+
+  const [existing] = await db
+    .select()
+    .from(ticketPriorities)
+    .where(eq(ticketPriorities.id, id))
+    .limit(1);
+  if (!existing) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  if (existing.isDefault) {
+    return NextResponse.json(
+      {
+        error:
+          "Cannot delete the default priority. Set another priority as default first.",
+      },
+      { status: 400 }
+    );
+  }
+
+  // Check ticket usage
+  const [{ total: ticketCount }] = await db
+    .select({ total: count() })
+    .from(tickets)
+    .where(eq(tickets.priority, existing.slug));
+
+  if (Number(ticketCount) > 0) {
+    return NextResponse.json(
+      { error: `Cannot delete: ${ticketCount} ticket(s) use this priority.` },
+      { status: 400 }
+    );
+  }
+
+  // Check if it's the only priority
+  const [{ total: priorityCount }] = await db
+    .select({ total: count() })
+    .from(ticketPriorities);
+  if (Number(priorityCount) <= 1) {
+    return NextResponse.json(
+      { error: "Cannot delete the only priority." },
+      { status: 400 }
+    );
+  }
+
+  await db.delete(ticketPriorities).where(eq(ticketPriorities.id, id));
+  return NextResponse.json({ ok: true });
+}

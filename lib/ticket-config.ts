@@ -1,16 +1,45 @@
 import { asc, eq } from "drizzle-orm";
+import {
+  ticketCategories,
+  ticketPriorities,
+  ticketStatuses,
+} from "@/db/schema";
 import { db } from "@/lib/db";
-import { ticketStatuses, ticketCategories } from "@/db/schema";
 
 export type TicketStatus = typeof ticketStatuses.$inferSelect;
 export type TicketCategory = typeof ticketCategories.$inferSelect;
+export type TicketPriority = typeof ticketPriorities.$inferSelect;
 
 export async function getTicketStatuses(): Promise<TicketStatus[]> {
-  return db.select().from(ticketStatuses).orderBy(asc(ticketStatuses.sortOrder));
+  return db
+    .select()
+    .from(ticketStatuses)
+    .orderBy(asc(ticketStatuses.sortOrder));
 }
 
 export async function getTicketCategories(): Promise<TicketCategory[]> {
-  return db.select().from(ticketCategories).orderBy(asc(ticketCategories.sortOrder));
+  return db
+    .select()
+    .from(ticketCategories)
+    .orderBy(asc(ticketCategories.sortOrder));
+}
+
+export async function getTicketPriorities(): Promise<TicketPriority[]> {
+  return db
+    .select()
+    .from(ticketPriorities)
+    .orderBy(asc(ticketPriorities.sortOrder));
+}
+
+export async function getDefaultPriority(): Promise<
+  TicketPriority | undefined
+> {
+  const [row] = await db
+    .select()
+    .from(ticketPriorities)
+    .where(eq(ticketPriorities.isDefault, true))
+    .limit(1);
+  return row;
 }
 
 export async function getDefaultStatus(): Promise<TicketStatus | undefined> {

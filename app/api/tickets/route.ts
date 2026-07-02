@@ -1,14 +1,18 @@
 import { createId } from "@paralleldrive/cuid2";
-import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { ticketActivity, ticketAttachments, tickets } from "@/db/schema";
 import { db } from "@/lib/db";
-import { auth } from "@/lib/auth";
-import { tickets, ticketAttachments, ticketActivity } from "@/db/schema";
-import { storage } from "@/lib/storage";
 import { enqueueEmail } from "@/lib/email";
 import { ticketCreatedTemplate } from "@/lib/email/templates/ticket-created";
 import { env } from "@/lib/env";
-import { getTicketCategories, getDefaultStatus } from "@/lib/ticket-config";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { storage } from "@/lib/storage";
+import {
+  getDefaultPriority,
+  getDefaultStatus,
+  getTicketCategories,
+} from "@/lib/ticket-config";
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
@@ -22,6 +26,19 @@ const MAX_FILES = 5;
 
 // POST /api/tickets — public (customer ticket submission)
 export async function POST(request: NextRequest) {
+  const { allowed } = await checkRateLimit({
+    action: "ticket_submit",
+    key: getClientIp(request),
+    limit: 5,
+    windowMinutes: 10,
+  });
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429 }
+    );
+  }
+
   let formData: FormData;
   try {
     formData = await request.formData();
@@ -34,32 +51,48 @@ export async function POST(request: NextRequest) {
   const subject = String(formData.get("subject") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim();
-  const attachmentFiles = formData.getAll("attachments").filter(
-    (v): v is File => v instanceof File && v.size > 0
-  );
+  const attachmentFiles = formData
+    .getAll("attachments")
+    .filter((v): v is File => v instanceof File && v.size > 0);
 
   // Validation
   if (!name || name.length < 2 || name.length > 100) {
-    return NextResponse.json({ error: "Name must be 2–100 characters." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Name must be 2–100 characters." },
+      { status: 400 }
+    );
   }
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json({ error: "Invalid email address." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid email address." },
+      { status: 400 }
+    );
   }
   if (!subject || subject.length < 5 || subject.length > 200) {
-    return NextResponse.json({ error: "Subject must be 5–200 characters." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Subject must be 5–200 characters." },
+      { status: 400 }
+    );
   }
   if (!description || description.length < 10 || description.length > 5000) {
-    return NextResponse.json({ error: "Description must be 10–5000 characters." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Description must be 10–5000 characters." },
+      { status: 400 }
+    );
   }
-  const [validCategories, defaultStatus] = await Promise.all([
+  const [validCategories, defaultStatus, defaultPriority] = await Promise.all([
     getTicketCategories(),
     getDefaultStatus(),
+    getDefaultPriority(),
   ]);
   if (!validCategories.some((c) => c.slug === category)) {
     return NextResponse.json({ error: "Invalid category." }, { status: 400 });
   }
   if (attachmentFiles.length > MAX_FILES) {
-    return NextResponse.json({ error: `Maximum ${MAX_FILES} files allowed.` }, { status: 400 });
+    return NextResponse.json(
+      { error: `Maximum ${MAX_FILES} files allowed.` },
+      { status: 400 }
+    );
   }
   for (const file of attachmentFiles) {
     if (file.size > MAX_FILE_SIZE) {
@@ -112,6 +145,7 @@ export async function POST(request: NextRequest) {
         description,
         category,
         status: defaultStatus?.slug ?? "open",
+        priority: defaultPriority?.slug ?? "normal",
         customerName: name,
         customerEmail: email,
         customerToken,
@@ -170,28 +204,19 @@ export async function POST(request: NextRequest) {
       )
       .catch((err) => console.error("[ticket.created email]", err));
 
-    return NextResponse.json({ ticketNumber: inserted.ticketNumber }, { status: 201 });
+    return NextResponse.json(
+      { ticketNumber: inserted.ticketNumber },
+      { status: 201 }
+    );
   } catch (err) {
     // Clean up uploaded files on DB failure
     for (const a of uploadedAttachments) {
       await storage.delete(a.storageKey).catch(() => undefined);
     }
     console.error("[POST /api/tickets]", err);
-    return NextResponse.json({ error: "Failed to create ticket." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to create ticket." },
+      { status: 500 }
+    );
   }
-}
-
-// GET /api/tickets — agent/admin only
-export async function GET(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
-  const role = session.user.role;
-  if (role !== "agent" && role !== "admin") {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-  }
-
-  // TODO: paginated ticket list with filters
-  return NextResponse.json({ tickets: [] });
 }

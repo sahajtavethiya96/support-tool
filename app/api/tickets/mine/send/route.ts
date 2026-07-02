@@ -1,10 +1,13 @@
 import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { db } from "@/lib/db";
+import { NextResponse } from "next/server";
 import { tickets } from "@/db/schema";
-import { env } from "@/lib/env";
 import { signEmailToken } from "@/lib/customer-access";
+import { db } from "@/lib/db";
+import { enqueueEmail } from "@/lib/email";
+import { myTicketsListTemplate } from "@/lib/email/templates/my-tickets-list";
+import { env } from "@/lib/env";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   let body: { email?: string } = {};
@@ -14,9 +17,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const email = String(body.email ?? "").trim().toLowerCase();
+  const email = String(body.email ?? "")
+    .trim()
+    .toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: "Invalid email." }, { status: 400 });
+  }
+
+  const [byIp, byEmail] = await Promise.all([
+    checkRateLimit({
+      action: "my_tickets_send_ip",
+      key: getClientIp(request),
+      limit: 5,
+      windowMinutes: 10,
+    }),
+    checkRateLimit({
+      action: "my_tickets_send_email",
+      key: email,
+      limit: 5,
+      windowMinutes: 10,
+    }),
+  ]);
+  if (!byIp.allowed || !byEmail.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429 }
+    );
   }
 
   // Fetch non-closed tickets for this email
@@ -31,14 +57,21 @@ export async function POST(request: NextRequest) {
     .from(tickets)
     .where(eq(tickets.customerEmail, email));
 
-  // TODO: enqueue email job containing the single "My Tickets" list link.
-  // For now: silently succeed (prevents email enumeration).
-  console.log(`[my-tickets] ${customerTickets.length} ticket(s) found for ${email}`);
+  // Always respond the same way regardless of whether tickets exist — only
+  // send an email when there's something to show (prevents email enumeration).
   if (customerTickets.length > 0) {
     const listUrl = `${env.NEXT_PUBLIC_APP_URL}/my-tickets/${signEmailToken(email)}`;
-    console.log(`[my-tickets] list link for ${email} → ${listUrl}`);
+    myTicketsListTemplate({ listUrl, ticketCount: customerTickets.length })
+      .then(({ html, text }) =>
+        enqueueEmail({
+          to: email,
+          subject: "Your support tickets",
+          html,
+          text,
+        })
+      )
+      .catch((err) => console.error("[my-tickets email]", err));
   }
 
-  // Always return the same response regardless of whether tickets exist
   return NextResponse.json({ ok: true });
 }

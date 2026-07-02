@@ -27,6 +27,11 @@ export const QUEUE_OPTIONS: Record<
     policy: "exclusive",
     retryLimit: 0,
   },
+  [JOB_NAMES.RATE_LIMIT_HITS_PRUNE]: {
+    expireInSeconds: 300,
+    policy: "exclusive",
+    retryLimit: 0,
+  },
   [JOB_NAMES.SCAFFOLD_HEALTHCHECK]: {
     expireInSeconds: 120,
     policy: "exclusive",

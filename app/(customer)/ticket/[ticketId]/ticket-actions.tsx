@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,9 +14,9 @@ import {
 } from "@/components/ui/dialog";
 
 interface Props {
+  isClosed: boolean;
   ticketId: string;
   token: string;
-  isClosed: boolean;
 }
 
 export function TicketActions({ ticketId, token, isClosed }: Props) {
@@ -82,11 +82,11 @@ export function TicketActions({ ticketId, token, isClosed }: Props) {
     <>
       {!isClosed && (
         <Button
-          variant="outline"
-          size="sm"
           className="border-sand text-stone hover:text-bark hover:border-bark"
-          onClick={() => setCloseOpen(true)}
           disabled={loading}
+          onClick={() => setCloseOpen(true)}
+          size="sm"
+          variant="outline"
         >
           Close ticket
         </Button>
@@ -94,11 +94,11 @@ export function TicketActions({ ticketId, token, isClosed }: Props) {
 
       {isClosed && (
         <Button
-          variant="outline"
-          size="sm"
           className="border-sand text-stone hover:text-bark hover:border-bark"
-          onClick={handleReopen}
           disabled={loading}
+          onClick={handleReopen}
+          size="sm"
+          variant="outline"
         >
           {loading ? "Reopening…" : "Reopen ticket"}
         </Button>
@@ -106,7 +106,7 @@ export function TicketActions({ ticketId, token, isClosed }: Props) {
 
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
 
-      <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
+      <Dialog onOpenChange={setCloseOpen} open={closeOpen}>
         <DialogContent className="rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-bark">Close this ticket?</DialogTitle>
@@ -117,17 +117,17 @@ export function TicketActions({ ticketId, token, isClosed }: Props) {
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button
-              variant="outline"
               className="border-sand text-bark"
-              onClick={() => setCloseOpen(false)}
               disabled={loading}
+              onClick={() => setCloseOpen(false)}
+              variant="outline"
             >
               Cancel
             </Button>
             <Button
               className="bg-bark hover:bg-bark/90 text-white"
-              onClick={handleClose}
               disabled={loading}
+              onClick={handleClose}
             >
               {loading ? "Closing…" : "Close Ticket"}
             </Button>

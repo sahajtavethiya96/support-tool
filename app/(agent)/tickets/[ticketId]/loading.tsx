@@ -34,7 +34,10 @@ export default function TicketDetailLoading() {
 
           {/* Comments */}
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-card rounded-xl border border-border shadow-soft p-5 space-y-3">
+            <div
+              className="bg-card rounded-xl border border-border shadow-soft p-5 space-y-3"
+              key={i}
+            >
               <div className="flex items-center gap-3">
                 <Skeleton className="h-8 w-8 rounded-full" />
                 <div className="space-y-1">

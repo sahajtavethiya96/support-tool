@@ -1,16 +1,16 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
-  TicketIcon,
   ArrowRightIcon,
-  EnvelopeIcon,
-  PaperPlaneTiltIcon,
+  BellIcon,
   ChatCircleDotsIcon,
   CheckCircleIcon,
+  EnvelopeIcon,
+  PaperPlaneTiltIcon,
   ShieldCheckIcon,
-  BellIcon,
+  TicketIcon,
   UserIcon,
 } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { PRODUCT_NAME } from "@/config/platform";
 import { getCurrentSession } from "@/lib/authz";
@@ -44,28 +44,39 @@ const TRUST = [
 
 export default async function HomePage() {
   const session = await getCurrentSession();
-  if (session) redirect("/tickets");
+  if (session) {
+    redirect("/tickets");
+  }
 
   return (
     <div className="min-h-screen bg-public flex flex-col">
       {/* ── Header ── */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-sand sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="size-7 rounded-md bg-bark flex items-center justify-center">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <div className="size-7 rounded-md bg-bark flex items-center justify-center shrink-0">
               <TicketIcon className="size-4 text-cream" weight="fill" />
             </div>
-            <span className="font-semibold text-bark text-sm">{PRODUCT_NAME}</span>
+            <span className="font-semibold text-bark text-sm truncate">
+              {PRODUCT_NAME}
+            </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
             <Link
+              className="hidden sm:inline text-sm text-stone hover:text-bark transition-colors"
               href="/my-tickets"
-              className="text-sm text-stone hover:text-bark transition-colors"
             >
               Find My Tickets
             </Link>
-            <Button asChild size="sm" className="bg-bark hover:bg-bark/90 text-white rounded-md">
-              <Link href="/submit">Submit a Ticket</Link>
+            <Button
+              asChild
+              className="bg-bark hover:bg-bark/90 text-white rounded-md"
+              size="sm"
+            >
+              <Link href="/submit">
+                <span className="sm:hidden">Submit</span>
+                <span className="hidden sm:inline">Submit a Ticket</span>
+              </Link>
             </Button>
           </div>
         </div>
@@ -81,25 +92,25 @@ export default async function HomePage() {
             <div className="absolute top-40 -right-16 size-72 rounded-full bg-stone/20 blur-3xl" />
           </div>
 
-          <div className="relative max-w-5xl mx-auto px-6 pt-20 pb-16 sm:pt-28 sm:pb-20 flex flex-col items-center text-center">
+          <div className="relative max-w-5xl mx-auto px-4 sm:px-6 pt-16 pb-14 sm:pt-28 sm:pb-20 flex flex-col items-center text-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-sand bg-white/70 px-3 py-1 text-2xs font-medium uppercase tracking-eyebrow text-stone">
               <span className="size-1.5 rounded-full bg-success" />
               Support team online
             </span>
 
-            <h1 className="mt-6 text-4xl sm:text-5xl font-semibold text-bark leading-[1.1] max-w-2xl">
+            <h1 className="mt-6 text-3xl sm:text-4xl md:text-5xl font-semibold text-bark leading-[1.1] max-w-2xl">
               How can we help you today?
             </h1>
             <p className="mt-4 text-base sm:text-lg text-stone max-w-md leading-relaxed">
-              Submit a ticket and our team will get back to you as soon as possible.
-              Track every reply in one place.
+              Submit a ticket and our team will get back to you as soon as
+              possible. Track every reply in one place.
             </p>
 
-            <div className="mt-9 flex flex-col sm:flex-row items-center gap-3">
+            <div className="mt-9 flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
               <Button
                 asChild
+                className="w-full sm:w-auto bg-bark hover:bg-bark/90 text-white rounded-md px-8 gap-2 shadow-sm"
                 size="lg"
-                className="bg-bark hover:bg-bark/90 text-white rounded-md px-8 gap-2 shadow-sm"
               >
                 <Link href="/submit">
                   Submit a Support Ticket
@@ -108,9 +119,9 @@ export default async function HomePage() {
               </Button>
               <Button
                 asChild
-                variant="outline"
+                className="w-full sm:w-auto border-sand bg-white/60 text-bark hover:bg-white rounded-md px-8 gap-2"
                 size="lg"
-                className="border-sand bg-white/60 text-bark hover:bg-white rounded-md px-8 gap-2"
+                variant="outline"
               >
                 <Link href="/my-tickets">
                   <EnvelopeIcon className="size-4" />
@@ -122,7 +133,10 @@ export default async function HomePage() {
             {/* Trust strip */}
             <div className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
               {TRUST.map(({ icon: Icon, label }) => (
-                <div key={label} className="flex items-center gap-1.5 text-xs text-stone">
+                <div
+                  className="flex items-center gap-1.5 text-xs text-stone"
+                  key={label}
+                >
                   <Icon className="size-4 text-bark/70" weight="bold" />
                   {label}
                 </div>
@@ -132,17 +146,19 @@ export default async function HomePage() {
         </section>
 
         {/* ── How it works ── */}
-        <section className="max-w-5xl mx-auto px-6 pb-24">
+        <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
           <div className="text-center mb-10">
             <h2 className="text-2xl font-semibold text-bark">How it works</h2>
-            <p className="mt-2 text-sm text-stone">Three simple steps to get your issue resolved.</p>
+            <p className="mt-2 text-sm text-stone">
+              Three simple steps to get your issue resolved.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             {STEPS.map(({ icon: Icon, step, title, desc }) => (
               <div
-                key={step}
                 className="group relative bg-white rounded-xl border border-sand shadow-soft p-6 text-left transition-all hover:shadow-md hover:-translate-y-0.5"
+                key={step}
               >
                 <span className="absolute top-5 right-6 text-2xl font-semibold text-sand/60 tabular-nums">
                   {step}
@@ -151,21 +167,26 @@ export default async function HomePage() {
                   <Icon className="size-5 text-bark" weight="duotone" />
                 </div>
                 <h3 className="font-semibold text-bark text-sm">{title}</h3>
-                <p className="text-stone text-sm mt-1.5 leading-relaxed">{desc}</p>
+                <p className="text-stone text-sm mt-1.5 leading-relaxed">
+                  {desc}
+                </p>
               </div>
             ))}
           </div>
 
           {/* Closing CTA card */}
-          <div className="mt-10 rounded-xl bg-bark px-8 py-10 text-center">
-            <h3 className="text-xl font-semibold text-cream">Ready to get help?</h3>
+          <div className="mt-10 rounded-xl bg-bark px-5 sm:px-8 py-8 sm:py-10 text-center">
+            <h3 className="text-xl font-semibold text-cream">
+              Ready to get help?
+            </h3>
             <p className="mt-2 text-sm text-sand max-w-sm mx-auto">
-              It only takes a minute. Tell us what's going on and we'll take it from there.
+              It only takes a minute. Tell us what's going on and we'll take it
+              from there.
             </p>
             <Button
               asChild
+              className="mt-6 w-full sm:w-auto bg-cream hover:bg-cream/90 text-bark rounded-md px-8 gap-2"
               size="lg"
-              className="mt-6 bg-cream hover:bg-cream/90 text-bark rounded-md px-8 gap-2"
             >
               <Link href="/submit">
                 Submit a Ticket
@@ -177,16 +198,19 @@ export default async function HomePage() {
       </main>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-sand bg-white/50 py-6">
-        <p className="text-center text-xs text-stone">
-          {PRODUCT_NAME} · Open-source self-hosted support tool ·{" "}
+      <footer className="border-t border-sand bg-white/50 py-6 px-4">
+        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-xs text-stone">
+          <span>{PRODUCT_NAME}</span>
+          <span className="hidden sm:inline">·</span>
+          <span>Open-source self-hosted support tool</span>
+          <span className="hidden sm:inline">·</span>
           <Link
-            href="/login"
             className="hover:text-bark transition-colors underline underline-offset-4"
+            href="/login"
           >
             Agent login
           </Link>
-        </p>
+        </div>
       </footer>
     </div>
   );

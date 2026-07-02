@@ -33,8 +33,12 @@ export function PushInit({ userId }: { userId: string }) {
         // different user reassigns the device, so sign-out/in "just works".
         await beamsClient.setUserId(userId, tokenProvider);
       } catch (err) {
-        // Permission denied / unsupported browser / Beams misconfig — non-fatal.
-        console.error("[beams] init failed", err);
+        // Permission denied / unsupported browser / token endpoint unavailable —
+        // all non-fatal (OS push simply won't work; in-app + email still do).
+        console.warn(
+          "[beams] push registration skipped:",
+          err instanceof Error ? err.message : err
+        );
       }
     })();
 

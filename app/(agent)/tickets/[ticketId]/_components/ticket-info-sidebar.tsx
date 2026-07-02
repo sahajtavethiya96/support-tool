@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { ClockIcon, TrashIcon, UserIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/common/searchable-select";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -13,28 +14,39 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type {
+  TicketCategory,
+  TicketPriority,
+  TicketStatus,
+} from "@/lib/ticket-config";
 import { COLOR_BADGE, formatTicketDateTime } from "@/lib/tickets";
-import type { TicketStatus, TicketCategory } from "@/lib/ticket-config";
-import { ClockIcon, UserIcon, TrashIcon } from "@phosphor-icons/react";
 
 type Agent = { id: string; name: string | null; email: string };
 
 interface Activity {
-  id: string;
+  action: string;
   actorName: string;
   actorRole: string;
-  action: string;
-  metadata: unknown;
   createdAt: Date;
+  id: string;
+  metadata: unknown;
 }
 
 interface Props {
+  activity: Activity[];
+  agents: Agent[];
+  categories: TicketCategory[];
+  currentUserId: string;
+  isAdmin?: boolean;
+  priorities: TicketPriority[];
+  statuses: TicketStatus[];
   ticket: {
     id: string;
     ticketNumber: number;
     subject: string;
     status: string;
     category: string;
+    priority: string;
     customerName: string;
     customerEmail: string;
     assignedAgentId: string | null;
@@ -42,17 +54,21 @@ interface Props {
     updatedAt: Date;
     closedAt: Date | null;
   };
-  agents: Agent[];
-  activity: Activity[];
-  statuses: TicketStatus[];
-  categories: TicketCategory[];
-  currentUserId: string;
-  isAdmin?: boolean;
 }
 
-export function TicketInfoSidebar({ ticket, agents, activity, statuses, categories, currentUserId, isAdmin = false }: Props) {
+export function TicketInfoSidebar({
+  ticket,
+  agents,
+  activity,
+  statuses,
+  categories,
+  priorities,
+  currentUserId,
+  isAdmin = false,
+}: Props) {
   const statusMap = Object.fromEntries(statuses.map((s) => [s.slug, s]));
   const categoryMap = Object.fromEntries(categories.map((c) => [c.slug, c]));
+  const priorityMap = Object.fromEntries(priorities.map((p) => [p.slug, p]));
   const closedStatus = statuses.find((s) => s.isClosedState);
   const defaultStatus = statuses.find((s) => s.isDefault);
 
@@ -64,19 +80,29 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
       const m = a.metadata as { from?: string; to?: string } | null;
       return `Status: ${statusMap[m?.from ?? ""]?.label ?? m?.from} → ${statusMap[m?.to ?? ""]?.label ?? m?.to}`;
     },
+    priority_changed: (a) => {
+      const m = a.metadata as { from?: string; to?: string } | null;
+      return `Priority: ${priorityMap[m?.from ?? ""]?.label ?? m?.from} → ${priorityMap[m?.to ?? ""]?.label ?? m?.to}`;
+    },
     assigned: (a) => {
       const m = a.metadata as { agentName?: string } | null;
       return `Assigned to ${m?.agentName ?? "agent"}`;
     },
     unassigned: () => "Unassigned",
-    comment_added: (a) => `${a.actorRole === "customer" ? "Customer" : "Agent"} replied`,
+    comment_added: (a) =>
+      `${a.actorRole === "customer" ? "Customer" : "Agent"} replied`,
     internal_note_added: () => "Internal note added",
     attachment_added: () => "Attachment added",
+    attachment_deleted: (a) => {
+      const m = a.metadata as { filename?: string } | null;
+      return `Attachment deleted${m?.filename ? `: ${m.filename}` : ""}`;
+    },
   };
   const router = useRouter();
 
   const [status, setStatus] = useState(ticket.status);
   const [category, setCategory] = useState(ticket.category);
+  const [priority, setPriority] = useState(ticket.priority);
   const [assignedAgentId, setAssignedAgentId] = useState<string | null>(
     ticket.assignedAgentId
   );
@@ -124,13 +150,18 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
     const ok = await patch({ status: newStatus });
     if (ok) {
       setStatus(newStatus);
-      toast.success(`Status changed to ${statusMap[newStatus]?.label ?? newStatus}.`);
+      toast.success(
+        `Status changed to ${statusMap[newStatus]?.label ?? newStatus}.`
+      );
     }
   }
 
   async function handleConfirmClose() {
     const target = pendingClose ?? closedStatus?.slug;
-    if (!target) { setCloseOpen(false); return; }
+    if (!target) {
+      setCloseOpen(false);
+      return;
+    }
     const ok = await patch({ status: target });
     if (ok) {
       setStatus(target);
@@ -144,7 +175,19 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
     const ok = await patch({ category: newCategory });
     if (ok) {
       setCategory(newCategory);
-      toast.success(`Category changed to ${categoryMap[newCategory]?.label ?? newCategory}.`);
+      toast.success(
+        `Category changed to ${categoryMap[newCategory]?.label ?? newCategory}.`
+      );
+    }
+  }
+
+  async function handlePriorityChange(newPriority: string) {
+    const ok = await patch({ priority: newPriority });
+    if (ok) {
+      setPriority(newPriority);
+      toast.success(
+        `Priority changed to ${priorityMap[newPriority]?.label ?? newPriority}.`
+      );
     }
   }
 
@@ -164,7 +207,9 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
       body: JSON.stringify({}),
     });
     if (res.ok) {
-      const data = (await res.json().catch(() => null)) as { status?: string } | null;
+      const data = (await res.json().catch(() => null)) as {
+        status?: string;
+      } | null;
       setStatus(data?.status ?? defaultStatus?.slug ?? status);
       toast.success("Ticket reopened.");
       router.refresh();
@@ -176,7 +221,9 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
   async function confirmDelete() {
     setDeleting(true);
     try {
-      const res = await fetch(`/api/tickets/${ticket.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/tickets/${ticket.id}`, {
+        method: "DELETE",
+      });
       if (res.ok) {
         toast.success("Ticket deleted.");
         router.push("/tickets");
@@ -207,27 +254,42 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
           <div className="space-y-1">
             <span className="text-xs text-muted-foreground">Status</span>
             <SearchableSelect
-              value={status}
-              onValueChange={handleStatusChange}
               disabled={loading}
-              triggerClassName={`h-8 w-full text-xs border ${COLOR_BADGE[statusMap[status]?.color ?? "slate"] ?? "border-border"}`}
-              searchPlaceholder="Search status…"
+              onValueChange={handleStatusChange}
               options={statuses.map((s) => ({ value: s.slug, label: s.label }))}
+              searchPlaceholder="Search status…"
+              triggerClassName={`h-8 w-full text-xs border ${COLOR_BADGE[statusMap[status]?.color ?? "slate"] ?? "border-border"}`}
+              value={status}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-xs text-muted-foreground">Priority</span>
+            <SearchableSelect
+              disabled={loading}
+              onValueChange={handlePriorityChange}
+              options={priorities.map((p) => ({
+                value: p.slug,
+                label: p.label,
+              }))}
+              searchPlaceholder="Search priority…"
+              triggerClassName={`h-8 w-full text-xs border ${COLOR_BADGE[priorityMap[priority]?.color ?? "slate"] ?? "border-border"}`}
+              value={priority}
             />
           </div>
 
           <div className="space-y-1">
             <span className="text-xs text-muted-foreground">Category</span>
             <SearchableSelect
-              value={category}
-              onValueChange={handleCategoryChange}
               disabled={loading}
-              triggerClassName="h-8 w-full text-xs"
-              searchPlaceholder="Search category…"
+              onValueChange={handleCategoryChange}
               options={categories.map((c) => ({
                 value: c.slug,
                 label: categoryMap[c.slug]?.label ?? c.label,
               }))}
+              searchPlaceholder="Search category…"
+              triggerClassName="h-8 w-full text-xs"
+              value={category}
             />
           </div>
 
@@ -255,21 +317,24 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
 
         {statusMap[status]?.isClosedState ? (
           <Button
+            className="w-full border-border text-foreground hover:bg-accent text-xs"
+            disabled={loading}
+            onClick={handleReopen}
             size="sm"
             variant="outline"
-            className="w-full border-border text-foreground hover:bg-accent text-xs"
-            onClick={handleReopen}
-            disabled={loading}
           >
             Reopen Ticket
           </Button>
         ) : (
           <Button
+            className="w-full border-red-200 text-red-600 hover:bg-red-50 text-xs"
+            disabled={loading}
+            onClick={() => {
+              setPendingClose(null);
+              setCloseOpen(true);
+            }}
             size="sm"
             variant="outline"
-            className="w-full border-red-200 text-red-600 hover:bg-red-50 text-xs"
-            onClick={() => { setPendingClose(null); setCloseOpen(true); }}
-            disabled={loading}
           >
             Close Ticket
           </Button>
@@ -291,7 +356,9 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
             <p className="text-sm font-medium text-foreground truncate">
               {ticket.customerName}
             </p>
-            <p className="text-xs text-muted-foreground truncate">{ticket.customerEmail}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              {ticket.customerEmail}
+            </p>
           </div>
         </div>
       </div>
@@ -302,23 +369,23 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
           Assigned Agent
         </h3>
         <SearchableSelect
-          value={assignedAgentId ?? "unassigned"}
-          onValueChange={handleAssignChange}
           disabled={loading}
-          triggerClassName="h-8 w-full text-xs"
-          searchPlaceholder="Search agents…"
+          onValueChange={handleAssignChange}
           options={[
             { value: "unassigned", label: "Unassigned" },
             ...agents.map((a) => ({ value: a.id, label: a.name ?? a.email })),
           ]}
+          searchPlaceholder="Search agents…"
+          triggerClassName="h-8 w-full text-xs"
+          value={assignedAgentId ?? "unassigned"}
         />
         {assignedAgentId !== currentUserId && (
           <Button
+            className="w-full border-border text-foreground hover:bg-accent text-xs flex items-center gap-1.5"
+            disabled={loading}
+            onClick={() => handleAssignChange(currentUserId)}
             size="sm"
             variant="outline"
-            className="w-full border-border text-foreground hover:bg-accent text-xs flex items-center gap-1.5"
-            onClick={() => handleAssignChange(currentUserId)}
-            disabled={loading}
           >
             <UserIcon className="size-3" />
             Assign to me
@@ -336,7 +403,7 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
           {activity.map((a) => {
             const label = ACTION_LABELS[a.action]?.(a) ?? a.action;
             return (
-              <div key={a.id} className="flex gap-2 text-xs">
+              <div className="flex gap-2 text-xs" key={a.id}>
                 <span className="size-1.5 rounded-full bg-muted mt-1.5 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-foreground">{label}</p>
@@ -357,10 +424,10 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
             Danger Zone
           </h3>
           <Button
-            size="sm"
-            variant="outline"
             className="w-full border-red-200 text-red-600 hover:bg-red-50 text-xs flex items-center gap-1.5"
             onClick={() => setDeleteOpen(true)}
+            size="sm"
+            variant="outline"
           >
             <TrashIcon className="size-3.5" />
             Delete Ticket
@@ -369,10 +436,12 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
       )}
 
       {/* Close confirmation dialog */}
-      <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
+      <Dialog onOpenChange={setCloseOpen} open={closeOpen}>
         <DialogContent className="rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-foreground">Close this ticket?</DialogTitle>
+            <DialogTitle className="text-foreground">
+              Close this ticket?
+            </DialogTitle>
             <DialogDescription className="text-muted-foreground">
               The ticket will be marked as closed and the customer will be
               notified by email.
@@ -380,17 +449,17 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button
-              variant="outline"
               className="border-border text-foreground"
-              onClick={() => setCloseOpen(false)}
               disabled={loading}
+              onClick={() => setCloseOpen(false)}
+              variant="outline"
             >
               Cancel
             </Button>
             <Button
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              onClick={handleConfirmClose}
               disabled={loading}
+              onClick={handleConfirmClose}
             >
               {loading ? "Closing…" : "Close Ticket"}
             </Button>
@@ -399,7 +468,7 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
       </Dialog>
 
       {/* Delete Ticket dialog */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <Dialog onOpenChange={setDeleteOpen} open={deleteOpen}>
         <DialogContent className="rounded-xl">
           <DialogHeader>
             <div className="mx-auto mb-2 flex size-10 items-center justify-center rounded-full bg-red-100">
@@ -409,22 +478,23 @@ export function TicketInfoSidebar({ ticket, agents, activity, statuses, categori
               Delete ticket #{ticket.ticketNumber}?
             </DialogTitle>
             <DialogDescription className="text-muted-foreground text-center">
-              All comments and attachments will be permanently deleted. This cannot be undone.
+              All comments and attachments will be permanently deleted. This
+              cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button
-              variant="outline"
               className="flex-1 border-border text-foreground"
-              onClick={() => setDeleteOpen(false)}
               disabled={deleting}
+              onClick={() => setDeleteOpen(false)}
+              variant="outline"
             >
               Cancel
             </Button>
             <Button
               className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-              onClick={confirmDelete}
               disabled={deleting}
+              onClick={confirmDelete}
             >
               {deleting ? "Deleting…" : "Delete"}
             </Button>

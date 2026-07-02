@@ -7,3 +7,5 @@ export * from "@/db/schema/audit-logs";
 export * from "@/db/schema/job-logs";
 export * from "@/db/schema/ticket-config";
 export * from "@/db/schema/notifications";
+export * from "@/db/schema/rate-limit";
+export * from "@/db/schema/canned-responses";

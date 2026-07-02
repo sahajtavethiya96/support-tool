@@ -11,15 +11,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SearchableSelect } from "@/components/common/searchable-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { TicketCategory, TicketStatus } from "@/lib/ticket-config";
+import type {
+  TicketCategory,
+  TicketPriority,
+  TicketStatus,
+} from "@/lib/ticket-config";
 import { cn } from "@/lib/utils";
 
 interface Props {
   categories: TicketCategory[];
+  priorities: TicketPriority[];
   statuses: TicketStatus[];
 }
 
-export function TicketFilters({ statuses, categories }: Props) {
+export function TicketFilters({ statuses, categories, priorities }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -28,6 +33,7 @@ export function TicketFilters({ statuses, categories }: Props) {
 
   const status = searchParams.get("status") ?? "all";
   const category = searchParams.get("category") ?? "all";
+  const priority = searchParams.get("priority") ?? "all";
   const awaiting = searchParams.get("awaiting") === "1";
   const mine = searchParams.get("mine") === "1";
 
@@ -73,12 +79,19 @@ export function TicketFilters({ statuses, categories }: Props) {
   const categoryMap = Object.fromEntries(
     categories.map((c) => [c.slug, c.label])
   );
+  const priorityMap = Object.fromEntries(
+    priorities.map((p) => [p.slug, p.label])
+  );
 
   const activeFilters = [
     status !== "all" && { key: "status", label: statusMap[status] ?? status },
     category !== "all" && {
       key: "category",
       label: categoryMap[category] ?? category,
+    },
+    priority !== "all" && {
+      key: "priority",
+      label: priorityMap[priority] ?? priority,
     },
   ].filter(Boolean) as Array<{ key: string; label: string }>;
 
@@ -96,10 +109,10 @@ export function TicketFilters({ statuses, categories }: Props) {
           />
           {q && (
             <button
-              type="button"
-              onClick={() => setQ("")}
               aria-label="Clear search"
               className="absolute right-2.5 top-1/2 -translate-y-1/2 flex size-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              onClick={() => setQ("")}
+              type="button"
             >
               <XIcon className="size-4" />
             </button>
@@ -130,6 +143,19 @@ export function TicketFilters({ statuses, categories }: Props) {
           searchPlaceholder="Search category…"
           triggerClassName="w-44"
           value={category}
+        />
+
+        {/* Priority filter */}
+        <SearchableSelect
+          onValueChange={(v) => updateParams({ priority: v })}
+          options={[
+            { value: "all", label: "All Priorities" },
+            ...priorities.map((p) => ({ value: p.slug, label: p.label })),
+          ]}
+          placeholder="All Priorities"
+          searchPlaceholder="Search priority…"
+          triggerClassName="w-40"
+          value={priority}
         />
 
         {/* Assigned to me toggle */}
@@ -193,6 +219,7 @@ export function TicketFilters({ statuses, categories }: Props) {
                 q: "",
                 status: "all",
                 category: "all",
+                priority: "all",
                 awaiting: "",
                 mine: "",
               });

@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { RichTextEditor } from "@/components/common/rich-text-editor";
-import { isRichTextEmpty } from "@/lib/rich-text";
 import { PaperclipIcon, XIcon } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
+import { RichTextEditor } from "@/components/common/rich-text-editor";
+import { Button } from "@/components/ui/button";
+import { isRichTextEmpty } from "@/lib/rich-text";
 
 const ALLOWED_TYPES = new Set([
   "image/jpeg",
@@ -36,7 +36,9 @@ export function ReplyForm({ ticketId, token, totalAttachments }: Props) {
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? []);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
 
     const combined = [...files, ...selected];
     if (combined.length > maxNewFiles) {
@@ -103,14 +105,17 @@ export function ReplyForm({ ticketId, token, totalAttachments }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-sand shadow-soft p-6 space-y-4">
+    <form
+      className="bg-white rounded-xl border border-sand shadow-soft p-6 space-y-4"
+      onSubmit={handleSubmit}
+    >
       <h2 className="text-sm font-medium text-bark">Send a Reply</h2>
 
       <RichTextEditor
-        value={content}
+        disabled={submitting}
         onChange={setContent}
         placeholder="Write your reply…"
-        disabled={submitting}
+        value={content}
       />
 
       {/* File attachments */}
@@ -118,8 +123,8 @@ export function ReplyForm({ ticketId, token, totalAttachments }: Props) {
         <ul className="space-y-1">
           {files.map((f, i) => (
             <li
-              key={i}
               className="flex items-center gap-2 rounded-md bg-cream border border-sand px-3 py-2 text-xs"
+              key={i}
             >
               <PaperclipIcon className="size-3.5 text-stone shrink-0" />
               <span className="text-bark truncate flex-1">{f.name}</span>
@@ -127,9 +132,9 @@ export function ReplyForm({ ticketId, token, totalAttachments }: Props) {
                 {(f.size / 1024).toFixed(0)} KB
               </span>
               <button
-                type="button"
-                onClick={() => removeFile(i)}
                 className="text-stone hover:text-bark"
+                onClick={() => removeFile(i)}
+                type="button"
               >
                 <XIcon className="size-3.5" />
               </button>
@@ -146,13 +151,13 @@ export function ReplyForm({ ticketId, token, totalAttachments }: Props) {
             <PaperclipIcon className="size-3.5" />
             Attach file
             <input
-              ref={fileInputRef}
-              type="file"
-              multiple
               accept=".jpg,.jpeg,.png,.pdf,.zip,.txt"
               className="hidden"
-              onChange={handleFileChange}
               disabled={submitting}
+              multiple
+              onChange={handleFileChange}
+              ref={fileInputRef}
+              type="file"
             />
           </label>
         ) : (
@@ -160,9 +165,9 @@ export function ReplyForm({ ticketId, token, totalAttachments }: Props) {
         )}
 
         <Button
-          type="submit"
-          disabled={submitting || isRichTextEmpty(content)}
           className="bg-bark hover:bg-bark/90 text-white"
+          disabled={submitting || isRichTextEmpty(content)}
+          type="submit"
         >
           {submitting ? "Sending…" : "Send Reply"}
         </Button>

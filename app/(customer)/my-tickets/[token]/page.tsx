@@ -1,13 +1,13 @@
-import { notFound } from "next/navigation";
-import Link from "next/link";
-import { desc, eq } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { tickets } from "@/db/schema";
-import { getTicketStatuses, getTicketCategories } from "@/lib/ticket-config";
-import { COLOR_BADGE, formatTicketDateTime } from "@/lib/tickets";
-import { verifyEmailToken } from "@/lib/customer-access";
-import { PRODUCT_NAME } from "@/config/platform";
 import { CaretRightIcon, TicketIcon } from "@phosphor-icons/react/dist/ssr";
+import { desc, eq } from "drizzle-orm";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { PRODUCT_NAME } from "@/config/platform";
+import { tickets } from "@/db/schema";
+import { verifyEmailToken } from "@/lib/customer-access";
+import { db } from "@/lib/db";
+import { getTicketCategories, getTicketStatuses } from "@/lib/ticket-config";
+import { COLOR_BADGE, formatTicketDateTime } from "@/lib/tickets";
 
 interface Props {
   params: Promise<{ token: string }>;
@@ -17,7 +17,9 @@ export default async function MyTicketsListPage({ params }: Props) {
   const { token } = await params;
 
   const email = verifyEmailToken(token);
-  if (!email) notFound();
+  if (!email) {
+    notFound();
+  }
 
   const [rows, statuses, categories] = await Promise.all([
     db
@@ -51,15 +53,20 @@ export default async function MyTicketsListPage({ params }: Props) {
     <div className="min-h-screen bg-public">
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-sand sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="size-7 rounded-md bg-bark flex items-center justify-center">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+          <Link className="flex items-center gap-2 sm:gap-2.5 min-w-0" href="/">
+            <div className="size-7 rounded-md bg-bark flex items-center justify-center shrink-0">
               <TicketIcon className="size-4 text-cream" weight="fill" />
             </div>
-            <span className="font-semibold text-bark text-sm">{PRODUCT_NAME}</span>
+            <span className="font-semibold text-bark text-sm truncate">
+              {PRODUCT_NAME}
+            </span>
           </Link>
-          <nav className="flex gap-4 text-sm">
-            <Link href="/submit" className="text-stone hover:text-bark transition-colors">
+          <nav className="flex gap-4 text-sm shrink-0">
+            <Link
+              className="text-stone hover:text-bark transition-colors"
+              href="/submit"
+            >
               Submit a Ticket
             </Link>
           </nav>
@@ -70,7 +77,7 @@ export default async function MyTicketsListPage({ params }: Props) {
         <div>
           <h1 className="text-xl font-semibold text-bark">Your tickets</h1>
           <p className="text-xs text-stone mt-1">
-            {rows.length} ticket{rows.length !== 1 ? "s" : ""} for {email}
+            {rows.length} ticket{rows.length === 1 ? "" : "s"} for {email}
           </p>
         </div>
 
@@ -82,8 +89,8 @@ export default async function MyTicketsListPage({ params }: Props) {
               We couldn&apos;t find any tickets for this email.
             </p>
             <Link
-              href="/submit"
               className="mt-4 inline-flex items-center rounded-md bg-bark px-4 py-2 text-sm font-medium text-cream hover:bg-bark/90 transition-colors"
+              href="/submit"
             >
               Submit a ticket
             </Link>
@@ -92,18 +99,18 @@ export default async function MyTicketsListPage({ params }: Props) {
           <div className="space-y-6">
             {openTickets.length > 0 && (
               <TicketGroup
-                title="Open"
-                tickets={openTickets}
-                statusMap={statusMap}
                 categoryMap={categoryMap}
+                statusMap={statusMap}
+                tickets={openTickets}
+                title="Open"
               />
             )}
             {closedTickets.length > 0 && (
               <TicketGroup
-                title="Closed"
-                tickets={closedTickets}
-                statusMap={statusMap}
                 categoryMap={categoryMap}
+                statusMap={statusMap}
+                tickets={closedTickets}
+                title="Closed"
               />
             )}
           </div>
@@ -114,13 +121,13 @@ export default async function MyTicketsListPage({ params }: Props) {
 }
 
 interface TicketRow {
-  id: string;
-  ticketNumber: number;
-  subject: string;
-  status: string;
   category: string;
-  customerToken: string;
   createdAt: Date;
+  customerToken: string;
+  id: string;
+  status: string;
+  subject: string;
+  ticketNumber: number;
 }
 
 function TicketGroup({
@@ -142,29 +149,35 @@ function TicketGroup({
       <div className="bg-white rounded-xl border border-sand shadow-soft overflow-hidden divide-y divide-sand">
         {rows.map((t) => (
           <Link
-            key={t.id}
+            className="flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3.5 sm:py-4 hover:bg-cream/40 transition-colors"
             href={`/ticket/${t.id}?token=${t.customerToken}`}
-            className="flex items-center gap-4 px-5 py-4 hover:bg-cream/40 transition-colors"
+            key={t.id}
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-xs font-medium text-stone">#{t.ticketNumber}</span>
-                <span className="text-stone text-xs">·</span>
-                <span className="text-xs text-stone truncate">
+                <span className="text-xs font-medium text-stone shrink-0">
+                  #{t.ticketNumber}
+                </span>
+                <span className="text-stone text-xs shrink-0">·</span>
+                <span className="text-xs text-stone truncate min-w-0">
                   {categoryMap[t.category]?.label ?? t.category}
                 </span>
               </div>
-              <p className="text-sm font-medium text-bark truncate">{t.subject}</p>
-              <p className="text-xs text-stone mt-0.5">{formatTicketDateTime(t.createdAt)}</p>
+              <p className="text-sm font-medium text-bark truncate">
+                {t.subject}
+              </p>
+              <p className="text-xs text-stone mt-0.5">
+                {formatTicketDateTime(t.createdAt)}
+              </p>
             </div>
             <span
-              className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-medium shrink-0 ${
+              className={`inline-flex items-center rounded-md border px-2 sm:px-2.5 py-0.5 text-xs font-medium shrink-0 ${
                 COLOR_BADGE[statusMap[t.status]?.color ?? "slate"] ?? ""
               }`}
             >
               {statusMap[t.status]?.label ?? t.status}
             </span>
-            <CaretRightIcon className="size-4 text-stone shrink-0" />
+            <CaretRightIcon className="size-4 text-stone shrink-0 hidden sm:block" />
           </Link>
         ))}
       </div>

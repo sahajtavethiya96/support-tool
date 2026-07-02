@@ -52,6 +52,9 @@ export async function startWorker() {
   const { handleEmailEventsPrune } = await import(
     "@/lib/worker/handlers/email-events-prune"
   );
+  const { handleRateLimitHitsPrune } = await import(
+    "@/lib/worker/handlers/rate-limit-hits-prune"
+  );
   const { handleScaffoldHealthcheck } = await import(
     "@/lib/worker/handlers/scaffold-healthcheck"
   );
@@ -60,11 +63,13 @@ export async function startWorker() {
     work(JOB_NAMES.EMAIL_SEND, handleEmailSend),
     work(JOB_NAMES.EMAIL_OUTBOX_REAP, handleEmailOutboxReap),
     work(JOB_NAMES.EMAIL_EVENTS_PRUNE, handleEmailEventsPrune),
+    work(JOB_NAMES.RATE_LIMIT_HITS_PRUNE, handleRateLimitHitsPrune),
     work(JOB_NAMES.SCAFFOLD_HEALTHCHECK, handleScaffoldHealthcheck),
   ]);
 
   await boss.schedule(JOB_NAMES.EMAIL_OUTBOX_REAP, "*/15 * * * *", {});
   await boss.schedule(JOB_NAMES.EMAIL_EVENTS_PRUNE, "17 3 * * *", {});
+  await boss.schedule(JOB_NAMES.RATE_LIMIT_HITS_PRUNE, "23 3 * * *", {});
   await boss.schedule(JOB_NAMES.SCAFFOLD_HEALTHCHECK, "*/10 * * * *", {});
 
   console.log("[worker] handlers registered");

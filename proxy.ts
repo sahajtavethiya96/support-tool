@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { NextResponse } from "next/server";
 import { ADMIN_ROLE, AGENT_ROLE } from "@/config/platform";
+import { auth } from "@/lib/auth";
 
 export async function proxy(request: NextRequest) {
   const session = await auth.api.getSession({ headers: request.headers });
@@ -32,16 +32,22 @@ export async function proxy(request: NextRequest) {
   const isAdmin = userRole === ADMIN_ROLE;
 
   // Admin-only routes
-  if (request.nextUrl.pathname.startsWith("/admin") || request.nextUrl.pathname.startsWith("/api/admin")) {
-    if (!isAdmin) {
-      if (isApi) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      return NextResponse.redirect(new URL("/tickets", request.url));
+  if (
+    (request.nextUrl.pathname.startsWith("/admin") ||
+      request.nextUrl.pathname.startsWith("/api/admin")) &&
+    !isAdmin
+  ) {
+    if (isApi) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    return NextResponse.redirect(new URL("/tickets", request.url));
   }
 
   // Agent+admin routes
   if (!isAgent) {
-    if (isApi) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (isApi) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
@@ -61,11 +67,13 @@ export const config = {
     "/dashboard/:path*",
     "/tickets/:path*",
     "/admin/:path*",
+    "/canned-responses/:path*",
     "/api/admin/:path*",
     "/api/stats/:path*",
     "/api/agents/:path*",
     "/api/users/:path*",
     "/api/account/:path*",
     "/api/notifications/:path*",
+    "/api/canned-responses/:path*",
   ],
 };

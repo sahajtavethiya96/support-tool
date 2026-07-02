@@ -1,39 +1,34 @@
-import { Suspense } from "react";
-import Link from "next/link";
-import { and, count, desc, eq, ilike, or } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { tickets } from "@/db/schema/tickets";
-import { user } from "@/db/schema/auth";
-import { COLOR_BADGE, formatTicketDate } from "@/lib/tickets";
-import {
-  getTicketStatuses,
-  getTicketCategories,
-  type TicketStatus,
-  type TicketCategory,
-} from "@/lib/ticket-config";
-import { requireAgent } from "@/lib/authz";
-import { TicketFilters } from "./_components/ticket-filters";
 import { TicketIcon } from "@phosphor-icons/react/dist/ssr";
+import { and, count, desc, eq, ilike, or } from "drizzle-orm";
+import Link from "next/link";
+import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ADMIN_ROLE, AGENT_ROLE } from "@/config/platform";
+import { user } from "@/db/schema/auth";
+import { tickets } from "@/db/schema/tickets";
+import { requireAgent } from "@/lib/authz";
+import { db } from "@/lib/db";
+import {
+  getTicketCategories,
+  getTicketPriorities,
+  getTicketStatuses,
+  type TicketCategory,
+  type TicketPriority,
+  type TicketStatus,
+} from "@/lib/ticket-config";
+import { TicketFilters } from "./_components/ticket-filters";
+import { TicketsTable } from "./_components/tickets-table";
 
 export const metadata = { title: "All Tickets" };
 
 const PAGE_SIZE = 25;
 
-/** First letters of the first two words, e.g. "Sahaj Tavethiya" → "ST". */
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
-  return name.trim().slice(0, 2).toUpperCase();
-}
-
 type SearchParams = {
   q?: string;
   status?: string;
   category?: string;
+  priority?: string;
   awaiting?: string;
   mine?: string;
   page?: string;
@@ -46,24 +41,34 @@ interface Props {
 export default async function TicketsPage({ searchParams }: Props) {
   const params = await searchParams;
 
-  const [session, statuses, categories] = await Promise.all([
+  const [session, statuses, categories, priorities] = await Promise.all([
     requireAgent(),
     getTicketStatuses(),
     getTicketCategories(),
+    getTicketPriorities(),
   ]);
 
   return (
     <div className="p-6 space-y-5">
-      <TicketFilters statuses={statuses} categories={categories} />
+      <TicketFilters
+        categories={categories}
+        priorities={priorities}
+        statuses={statuses}
+      />
 
       {/* Re-suspends on every search/filter change (key = params), so the table
           skeleton shows while the new results load. */}
-      <Suspense key={JSON.stringify(params)} fallback={<TicketsTableSkeleton />}>
+      <Suspense
+        fallback={<TicketsTableSkeleton />}
+        key={JSON.stringify(params)}
+      >
         <TicketsResults
-          params={params}
           agentId={session.id}
-          statuses={statuses}
           categories={categories}
+          isAdmin={session.role === ADMIN_ROLE}
+          params={params}
+          priorities={priorities}
+          statuses={statuses}
         />
       </Suspense>
     </div>
@@ -73,42 +78,62 @@ export default async function TicketsPage({ searchParams }: Props) {
 async function TicketsResults({
   params,
   agentId,
+  isAdmin,
   statuses,
   categories,
+  priorities,
 }: {
   params: SearchParams;
   agentId: string;
+  isAdmin: boolean;
   statuses: TicketStatus[];
   categories: TicketCategory[];
+  priorities: TicketPriority[];
 }) {
   const statusMap = Object.fromEntries(statuses.map((s) => [s.slug, s]));
   const categoryMap = Object.fromEntries(categories.map((c) => [c.slug, c]));
+  const priorityMap = Object.fromEntries(priorities.map((p) => [p.slug, p]));
 
-  const page = Math.max(1, parseInt(params.page ?? "1") || 1);
+  const page = Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1);
   const search = params.q?.trim() ?? "";
   const statusFilter =
     params.status && params.status !== "all" ? params.status : null;
   const categoryFilter =
     params.category && params.category !== "all" ? params.category : null;
+  const priorityFilter =
+    params.priority && params.priority !== "all" ? params.priority : null;
   const awaitingFilter = params.awaiting === "1";
   const mineFilter = params.mine === "1";
 
   // Build where conditions
   const conditions = [];
   if (search) {
-    const numSearch = parseInt(search.replace("#", ""));
+    const numSearch = Number.parseInt(search.replace("#", ""), 10);
     const textConditions = [
       ilike(tickets.subject, `%${search}%`),
       ilike(tickets.customerName, `%${search}%`),
       ilike(tickets.customerEmail, `%${search}%`),
     ];
-    if (!isNaN(numSearch)) textConditions.push(eq(tickets.ticketNumber, numSearch) as never);
+    if (!isNaN(numSearch)) {
+      textConditions.push(eq(tickets.ticketNumber, numSearch) as never);
+    }
     conditions.push(or(...textConditions));
   }
-  if (statusFilter) conditions.push(eq(tickets.status, statusFilter));
-  if (categoryFilter) conditions.push(eq(tickets.category, categoryFilter));
-  if (awaitingFilter) conditions.push(eq(tickets.awaitingReply, true));
-  if (mineFilter) conditions.push(eq(tickets.assignedAgentId, agentId));
+  if (statusFilter) {
+    conditions.push(eq(tickets.status, statusFilter));
+  }
+  if (categoryFilter) {
+    conditions.push(eq(tickets.category, categoryFilter));
+  }
+  if (priorityFilter) {
+    conditions.push(eq(tickets.priority, priorityFilter));
+  }
+  if (awaitingFilter) {
+    conditions.push(eq(tickets.awaitingReply, true));
+  }
+  if (mineFilter) {
+    conditions.push(eq(tickets.assignedAgentId, agentId));
+  }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -124,6 +149,7 @@ async function TicketsResults({
       subject: tickets.subject,
       status: tickets.status,
       category: tickets.category,
+      priority: tickets.priority,
       customerName: tickets.customerName,
       assignedAgentId: tickets.assignedAgentId,
       assignedAgentName: user.name,
@@ -137,16 +163,44 @@ async function TicketsResults({
     .limit(PAGE_SIZE)
     .offset((page - 1) * PAGE_SIZE);
 
+  // Only needed for the bulk-assign picker, which only admins see.
+  const agents = isAdmin
+    ? await db
+        .select({ id: user.id, name: user.name, email: user.email })
+        .from(user)
+        .where(
+          and(
+            eq(user.banned, false),
+            or(eq(user.role, AGENT_ROLE), eq(user.role, ADMIN_ROLE))
+          )
+        )
+    : [];
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function buildPageUrl(p: number) {
     const qp = new URLSearchParams();
-    if (search) qp.set("q", search);
-    if (statusFilter) qp.set("status", statusFilter);
-    if (categoryFilter) qp.set("category", categoryFilter);
-    if (awaitingFilter) qp.set("awaiting", "1");
-    if (mineFilter) qp.set("mine", "1");
-    if (p > 1) qp.set("page", String(p));
+    if (search) {
+      qp.set("q", search);
+    }
+    if (statusFilter) {
+      qp.set("status", statusFilter);
+    }
+    if (categoryFilter) {
+      qp.set("category", categoryFilter);
+    }
+    if (priorityFilter) {
+      qp.set("priority", priorityFilter);
+    }
+    if (awaitingFilter) {
+      qp.set("awaiting", "1");
+    }
+    if (mineFilter) {
+      qp.set("mine", "1");
+    }
+    if (p > 1) {
+      qp.set("page", String(p));
+    }
     const qs = qp.toString();
     return `/tickets${qs ? `?${qs}` : ""}`;
   }
@@ -154,14 +208,18 @@ async function TicketsResults({
   return (
     <div className="space-y-5">
       <p className="text-sm text-muted-foreground">
-        {total} ticket{total !== 1 ? "s" : ""}
-        {search || statusFilter || categoryFilter ? " matching your filters" : ""}
+        {total} ticket{total === 1 ? "" : "s"}
+        {search || statusFilter || categoryFilter
+          ? " matching your filters"
+          : ""}
       </p>
 
       {rows.length === 0 ? (
         <div className="bg-card rounded-xl border border-border shadow-soft flex flex-col items-center justify-center py-20 text-center">
           <TicketIcon className="size-10 text-muted-foreground mb-3" />
-          <p className="text-base font-medium text-foreground">No tickets found</p>
+          <p className="text-base font-medium text-foreground">
+            No tickets found
+          </p>
           <p className="text-sm text-muted-foreground mt-1">
             {search || statusFilter || categoryFilter
               ? "Try adjusting your filters."
@@ -170,108 +228,15 @@ async function TicketsResults({
         </div>
       ) : (
         <>
-          {/* Table */}
-          <div className="bg-card rounded-xl border border-border shadow-soft overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-accent/50">
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-16">
-                      #
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Subject
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-32 hidden sm:table-cell">
-                      Status
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-36 hidden md:table-cell">
-                      Category
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-40 hidden lg:table-cell">
-                      Customer
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-24 hidden lg:table-cell">
-                      Assigned
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-28 hidden xl:table-cell">
-                      Updated
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {rows.map((row) => (
-                    <tr
-                      key={row.id}
-                      className="hover:bg-accent/40 transition-colors group"
-                    >
-                      <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
-                        #{row.ticketNumber}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/tickets/${row.id}`}
-                          className="font-medium text-foreground hover:underline line-clamp-1"
-                        >
-                          {row.subject}
-                        </Link>
-                        {/* Mobile: show status inline */}
-                        <div className="flex gap-1.5 mt-1 sm:hidden">
-                          <span
-                            className={`inline-flex items-center whitespace-nowrap rounded border px-1.5 py-0.5 text-xs font-medium ${COLOR_BADGE[statusMap[row.status]?.color ?? "slate"] ?? ""}`}
-                          >
-                            {statusMap[row.status]?.label ?? row.status}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 hidden sm:table-cell">
-                        <span
-                          className={`inline-flex items-center whitespace-nowrap rounded border px-2 py-0.5 text-xs font-medium ${COLOR_BADGE[statusMap[row.status]?.color ?? "slate"] ?? ""}`}
-                        >
-                          {statusMap[row.status]?.label ?? row.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 hidden md:table-cell">
-                        <span
-                          className={`inline-flex items-center whitespace-nowrap rounded border px-2 py-0.5 text-xs font-medium ${COLOR_BADGE[categoryMap[row.category]?.color ?? "slate"] ?? ""}`}
-                        >
-                          {categoryMap[row.category]?.label ?? row.category}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
-                        <span
-                          className="block max-w-36 truncate text-muted-foreground text-xs"
-                          title={row.customerName}
-                        >
-                          {row.customerName}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
-                        {row.assignedAgentName ? (
-                          <div
-                            className="size-7 rounded-full bg-primary/10 border border-border flex items-center justify-center text-2xs font-semibold text-foreground"
-                            title={row.assignedAgentName}
-                          >
-                            {getInitials(row.assignedAgentName)}
-                          </div>
-                        ) : (
-                          <span
-                            className="size-7 rounded-full border border-dashed border-border flex items-center justify-center text-muted-foreground"
-                            title="Unassigned"
-                          >
-                            —
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs hidden xl:table-cell whitespace-nowrap">
-                        {formatTicketDate(row.updatedAt)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <TicketsTable
+            agents={agents}
+            categoryMap={categoryMap}
+            isAdmin={isAdmin}
+            priorityMap={priorityMap}
+            rows={rows}
+            statuses={statuses}
+            statusMap={statusMap}
+          />
 
           {/* Pagination */}
           {totalPages > 1 && (
@@ -283,9 +248,9 @@ async function TicketsResults({
                 {page > 1 && (
                   <Button
                     asChild
-                    variant="outline"
-                    size="sm"
                     className="border-border text-foreground hover:bg-accent"
+                    size="sm"
+                    variant="outline"
                   >
                     <Link href={buildPageUrl(page - 1)}>Previous</Link>
                   </Button>
@@ -293,9 +258,9 @@ async function TicketsResults({
                 {page < totalPages && (
                   <Button
                     asChild
-                    variant="outline"
-                    size="sm"
                     className="border-border text-foreground hover:bg-accent"
+                    size="sm"
+                    variant="outline"
                   >
                     <Link href={buildPageUrl(page + 1)}>Next</Link>
                   </Button>
@@ -321,7 +286,7 @@ function TicketsTableSkeleton() {
         {/* Rows */}
         <div className="divide-y divide-border/60">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-4 px-4 py-3.5">
+            <div className="flex items-center gap-4 px-4 py-3.5" key={i}>
               <Skeleton className="h-3 w-10 shrink-0" />
               <Skeleton className="h-4 flex-1 max-w-xs" />
               <Skeleton className="h-5 w-16 rounded-md shrink-0 hidden sm:block" />

@@ -1,23 +1,29 @@
-import { notFound } from "next/navigation";
-import Link from "next/link";
+import { ArrowLeftIcon, LockSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { and, asc, eq } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { tickets, ticketComments, ticketAttachments, ticketActivity } from "@/db/schema/tickets";
-import { user } from "@/db/schema/auth";
-import { requireAgent } from "@/lib/authz";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { DeletableTicketAttachments } from "@/components/common/deletable-ticket-attachments";
+import { RichTextContent } from "@/components/common/rich-text-content";
 import { ADMIN_ROLE } from "@/config/platform";
+import { user } from "@/db/schema/auth";
+import {
+  ticketActivity,
+  ticketAttachments,
+  ticketComments,
+  tickets,
+} from "@/db/schema/tickets";
+import { requireAgent } from "@/lib/authz";
+import { getCannedResponses } from "@/lib/canned-responses";
+import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
+import {
+  getTicketCategories,
+  getTicketPriorities,
+  getTicketStatuses,
+} from "@/lib/ticket-config";
 import { COLOR_BADGE, formatTicketDateTime } from "@/lib/tickets";
-import { getTicketStatuses, getTicketCategories } from "@/lib/ticket-config";
 import { AgentReplyForm } from "./_components/agent-reply-form";
 import { TicketInfoSidebar } from "./_components/ticket-info-sidebar";
-import { RichTextContent } from "@/components/common/rich-text-content";
-import { TicketAttachments } from "@/components/common/ticket-attachments";
-import {
-  ArrowLeftIcon,
-  LockSimpleIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import { Separator } from "@/components/ui/separator";
 
 interface Props {
   params: Promise<{ ticketId: string }>;
@@ -35,6 +41,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
       description: tickets.description,
       category: tickets.category,
       status: tickets.status,
+      priority: tickets.priority,
       customerName: tickets.customerName,
       customerEmail: tickets.customerEmail,
       assignedAgentId: tickets.assignedAgentId,
@@ -46,12 +53,18 @@ export default async function AgentTicketDetailPage({ params }: Props) {
     .where(eq(tickets.id, ticketId))
     .limit(1);
 
-  if (!ticket) notFound();
+  if (!ticket) {
+    notFound();
+  }
 
-  const [statuses, categories] = await Promise.all([
-    getTicketStatuses(),
-    getTicketCategories(),
-  ]);
+  const [statuses, categories, priorities, cannedResponses] = await Promise.all(
+    [
+      getTicketStatuses(),
+      getTicketCategories(),
+      getTicketPriorities(),
+      getCannedResponses(),
+    ]
+  );
 
   const statusMap = Object.fromEntries(statuses.map((s) => [s.slug, s]));
   const categoryMap = Object.fromEntries(categories.map((c) => [c.slug, c]));
@@ -98,8 +111,8 @@ export default async function AgentTicketDetailPage({ params }: Props) {
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 mb-5">
         <Link
-          href="/tickets"
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          href="/tickets"
         >
           <ArrowLeftIcon className="size-3.5" />
           All Tickets
@@ -118,7 +131,9 @@ export default async function AgentTicketDetailPage({ params }: Props) {
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="text-xs text-muted-foreground font-mono">#{ticket.ticketNumber}</span>
+                  <span className="text-xs text-muted-foreground font-mono">
+                    #{ticket.ticketNumber}
+                  </span>
                   <span className="text-muted-foreground text-xs">·</span>
                   <span className="text-xs text-muted-foreground">
                     {categoryMap[ticket.category]?.label ?? ticket.category}
@@ -128,7 +143,9 @@ export default async function AgentTicketDetailPage({ params }: Props) {
                     {formatTicketDateTime(ticket.createdAt)}
                   </span>
                 </div>
-                <h1 className="text-lg font-semibold text-foreground">{ticket.subject}</h1>
+                <h1 className="text-lg font-semibold text-foreground">
+                  {ticket.subject}
+                </h1>
               </div>
               <span
                 className={`inline-flex items-center rounded border px-2.5 py-1 text-xs font-medium shrink-0 ${COLOR_BADGE[statusMap[ticket.status]?.color ?? "slate"] ?? ""}`}
@@ -146,8 +163,12 @@ export default async function AgentTicketDetailPage({ params }: Props) {
                   {ticket.customerName[0]?.toUpperCase()}
                 </div>
                 <div className="min-w-0">
-                  <span className="text-sm font-medium text-foreground">{ticket.customerName}</span>
-                  <span className="text-xs text-muted-foreground ml-2">Customer</span>
+                  <span className="text-sm font-medium text-foreground">
+                    {ticket.customerName}
+                  </span>
+                  <span className="text-xs text-muted-foreground ml-2">
+                    Customer
+                  </span>
                 </div>
                 <span className="text-xs text-muted-foreground ml-auto shrink-0">
                   {formatTicketDateTime(ticket.createdAt)}
@@ -158,7 +179,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
               </p>
               {ticketLevelAttachments.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-border">
-                  <TicketAttachments
+                  <DeletableTicketAttachments
                     items={ticketLevelAttachments.map((a) => ({
                       id: a.id,
                       url: storage.url(a.storageKey),
@@ -166,6 +187,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
                       mimeType: a.mimeType,
                       fileSize: a.fileSize,
                     }))}
+                    ticketId={ticket.id}
                   />
                 </div>
               )}
@@ -175,31 +197,38 @@ export default async function AgentTicketDetailPage({ params }: Props) {
           {/* Comment thread */}
           {comments.map((comment) => {
             const isCustomer = comment.authorRole === "customer";
-            const commentAttachments = attachmentsByComment.get(comment.id) ?? [];
+            const commentAttachments =
+              attachmentsByComment.get(comment.id) ?? [];
             return (
               <div
-                key={comment.id}
                 className={`flex ${isCustomer ? "justify-start" : "justify-end"}`}
+                key={comment.id}
               >
                 <div
                   className={`max-w-[85%] rounded-xl border p-4 ${
                     comment.isInternal
                       ? "bg-amber-50 border-amber-200"
                       : isCustomer
-                      ? "bg-accent border-border"
-                      : "bg-card border-border"
+                        ? "bg-accent border-border"
+                        : "bg-card border-border"
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <div
                       className={`size-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0 ${
-                        isCustomer ? "bg-primary text-primary-foreground" : "bg-stone text-white"
+                        isCustomer
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-stone text-white"
                       }`}
                     >
                       {comment.authorName[0]?.toUpperCase()}
                     </div>
-                    <span className="text-sm font-medium text-foreground">{comment.authorName}</span>
-                    <span className="text-xs text-muted-foreground capitalize">{comment.authorRole}</span>
+                    <span className="text-sm font-medium text-foreground">
+                      {comment.authorName}
+                    </span>
+                    <span className="text-xs text-muted-foreground capitalize">
+                      {comment.authorRole}
+                    </span>
                     {comment.isInternal && (
                       <span className="flex items-center gap-1 text-xs text-amber-700 bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5">
                         <LockSimpleIcon className="size-3" />
@@ -214,7 +243,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
 
                   {commentAttachments.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-border">
-                      <TicketAttachments
+                      <DeletableTicketAttachments
                         items={commentAttachments.map((a) => ({
                           id: a.id,
                           url: storage.url(a.storageKey),
@@ -222,6 +251,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
                           mimeType: a.mimeType,
                           fileSize: a.fileSize,
                         }))}
+                        ticketId={ticket.id}
                       />
                     </div>
                   )}
@@ -234,6 +264,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
           {isOpen && (
             <div className="bg-card rounded-xl border border-border shadow-soft p-5">
               <AgentReplyForm
+                cannedResponses={cannedResponses}
                 ticketId={ticket.id}
                 totalAttachments={attachments.length}
               />
@@ -244,13 +275,14 @@ export default async function AgentTicketDetailPage({ params }: Props) {
         {/* ── Right sidebar ── */}
         <div className="w-full lg:w-72 shrink-0">
           <TicketInfoSidebar
-            ticket={ticket}
-            agents={agents}
             activity={activity}
-            statuses={statuses}
+            agents={agents}
             categories={categories}
             currentUserId={session.id}
             isAdmin={session.role === ADMIN_ROLE}
+            priorities={priorities}
+            statuses={statuses}
+            ticket={ticket}
           />
         </div>
       </div>

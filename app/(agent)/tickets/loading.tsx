@@ -31,7 +31,7 @@ export default function TicketsLoading() {
         {/* Rows */}
         <div className="divide-y divide-border/50">
           {Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-4 px-4 py-3.5">
+            <div className="flex items-center gap-4 px-4 py-3.5" key={i}>
               <Skeleton className="h-4 w-10 shrink-0 font-mono" />
               <div className="flex-1 min-w-0 space-y-1.5">
                 <Skeleton className="h-4 w-3/4" />

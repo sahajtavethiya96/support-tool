@@ -23,7 +23,7 @@ export default function CustomerTicketLoading() {
           <Skeleton className="h-3 w-28" />
           <div className="bg-white rounded-xl border border-sand shadow-soft overflow-hidden divide-y divide-sand">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="px-4 py-3 space-y-2">
+              <div className="px-4 py-3 space-y-2" key={i}>
                 <div className="flex items-center justify-between">
                   <Skeleton className="h-3 w-10" />
                   <Skeleton className="h-4 w-14 rounded-md" />
@@ -61,7 +61,10 @@ export default function CustomerTicketLoading() {
 
           {/* Comments */}
           {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-xl border border-sand shadow-soft p-5 space-y-3">
+            <div
+              className="bg-white rounded-xl border border-sand shadow-soft p-5 space-y-3"
+              key={i}
+            >
               <div className="flex items-center gap-2 mb-1">
                 <Skeleton className="size-7 rounded-full" />
                 <Skeleton className="h-4 w-28" />
@@ -77,7 +80,7 @@ export default function CustomerTicketLoading() {
             <div className="rounded-md border border-sand overflow-hidden">
               <div className="flex gap-1 border-b border-sand px-2 py-1.5">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <Skeleton key={i} className="size-6 rounded" />
+                  <Skeleton className="size-6 rounded" key={i} />
                 ))}
               </div>
               <Skeleton className="h-24 w-full rounded-none" />

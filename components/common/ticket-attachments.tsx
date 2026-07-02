@@ -9,10 +9,21 @@ import {
   FilePdfIcon,
   FileTextIcon,
   FileZipIcon,
+  TrashIcon,
+  WarningCircleIcon,
   XIcon,
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 export interface AttachmentItem {
@@ -169,11 +180,15 @@ function Lightbox({
 export function TicketAttachments({
   items,
   className,
+  onDelete,
 }: {
   items: AttachmentItem[];
   className?: string;
+  /** When provided, renders a delete affordance on each attachment (agent/admin only — never pass this on the customer-facing page). */
+  onDelete?: (attachmentId: string) => void;
 }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AttachmentItem | null>(null);
 
   if (items.length === 0) {
     return null;
@@ -182,55 +197,90 @@ export function TicketAttachments({
   const images = items.filter((a) => a.mimeType.startsWith("image/"));
   const files = items.filter((a) => !a.mimeType.startsWith("image/"));
 
+  function confirmDelete() {
+    if (deleteTarget) {
+      onDelete?.(deleteTarget.id);
+      setDeleteTarget(null);
+    }
+  }
+
   return (
     <div className={cn("space-y-2", className)}>
       {images.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {images.map((a, i) => (
-            <button
-              className="group relative block size-24 overflow-hidden rounded-lg border border-border bg-muted"
+            <div
+              className="group relative size-24 overflow-hidden rounded-lg border border-border bg-muted"
               key={a.id}
-              onClick={() => setLightboxIndex(i)}
-              title={a.filename}
-              type="button"
             >
-              {/* biome-ignore lint/performance/noImgElement: storage URLs aren't configured for next/image (must work across local/S3/R2 drivers) */}
-              <img
-                alt={a.filename}
-                className="size-full object-cover transition-transform duration-200 group-hover:scale-105"
-                loading="lazy"
-                src={a.url}
-              />
-              <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-all group-hover:bg-black/40 group-hover:opacity-100">
-                <ArrowsOutSimpleIcon
-                  className="size-5 text-white"
-                  weight="bold"
+              <button
+                className="block size-full"
+                onClick={() => setLightboxIndex(i)}
+                title={a.filename}
+                type="button"
+              >
+                {/* biome-ignore lint/performance/noImgElement: storage URLs aren't configured for next/image (must work across local/S3/R2 drivers) */}
+                <img
+                  alt={a.filename}
+                  className="size-full object-cover transition-transform duration-200 group-hover:scale-105"
+                  loading="lazy"
+                  src={a.url}
                 />
-              </span>
-            </button>
+                <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-all group-hover:bg-black/40 group-hover:opacity-100">
+                  <ArrowsOutSimpleIcon
+                    className="size-5 text-white"
+                    weight="bold"
+                  />
+                </span>
+              </button>
+              {onDelete && (
+                <button
+                  aria-label={`Delete ${a.filename}`}
+                  className="absolute right-1 top-1 flex size-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
+                  onClick={() => setDeleteTarget(a)}
+                  type="button"
+                >
+                  <XIcon className="size-3.5" weight="bold" />
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
 
       {files.map((a) => (
-        <a
+        <div
           className="group flex max-w-sm items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2 transition-colors hover:bg-accent"
-          href={a.url}
           key={a.id}
-          rel="noopener noreferrer"
-          target="_blank"
         >
-          <FileTypeIcon mimeType={a.mimeType} />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-medium text-foreground">
-              {a.filename}
-            </p>
-            <p className="text-2xs text-muted-foreground">
-              {formatBytes(a.fileSize)}
-            </p>
-          </div>
-          <DownloadSimpleIcon className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground" />
-        </a>
+          <a
+            className="flex min-w-0 flex-1 items-center gap-2.5"
+            href={a.url}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <FileTypeIcon mimeType={a.mimeType} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-foreground">
+                {a.filename}
+              </p>
+              <p className="text-2xs text-muted-foreground">
+                {formatBytes(a.fileSize)}
+              </p>
+            </div>
+            <DownloadSimpleIcon className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground" />
+          </a>
+          {onDelete && (
+            <button
+              aria-label={`Delete ${a.filename}`}
+              className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
+              onClick={() => setDeleteTarget(a)}
+              type="button"
+            >
+              <TrashIcon className="size-4" />
+            </button>
+          )}
+        </div>
       ))}
 
       {lightboxIndex !== null && (
@@ -241,6 +291,45 @@ export function TicketAttachments({
           onIndexChange={setLightboxIndex}
         />
       )}
+
+      <Dialog
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        open={deleteTarget !== null}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/10">
+              <WarningCircleIcon
+                className="size-6 text-destructive"
+                weight="fill"
+              />
+            </div>
+            <DialogTitle className="text-center">
+              Delete attachment?
+            </DialogTitle>
+            <DialogDescription className="text-center">
+              {deleteTarget?.filename} will be permanently removed from this
+              ticket. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-row gap-2">
+            <Button
+              className="flex-1"
+              onClick={() => setDeleteTarget(null)}
+              variant="outline"
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={confirmDelete}
+              variant="destructive"
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

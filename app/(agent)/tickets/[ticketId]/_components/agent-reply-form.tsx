@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, useRef } from "react";
+import {
+  ChatCircleIcon,
+  LockSimpleIcon,
+  PaperclipIcon,
+  XIcon,
+} from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { RichTextEditor } from "@/components/common/rich-text-editor";
+import { Button } from "@/components/ui/button";
 import { isRichTextEmpty } from "@/lib/rich-text";
-import { PaperclipIcon, XIcon, LockSimpleIcon, ChatCircleIcon } from "@phosphor-icons/react";
 
 const ALLOWED_TYPES = new Set([
   "image/jpeg",
@@ -18,11 +23,16 @@ const ALLOWED_TYPES = new Set([
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 interface Props {
+  cannedResponses?: { id: string; title: string; content: string }[];
   ticketId: string;
   totalAttachments: number;
 }
 
-export function AgentReplyForm({ ticketId, totalAttachments }: Props) {
+export function AgentReplyForm({
+  ticketId,
+  totalAttachments,
+  cannedResponses,
+}: Props) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -36,16 +46,24 @@ export function AgentReplyForm({ ticketId, totalAttachments }: Props) {
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? []);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     const combined = [...files, ...selected];
     if (combined.length > maxNewFiles) {
       setError(`Only ${maxNewFiles} more file(s) allowed.`);
       return;
     }
     const oversized = combined.find((f) => f.size > MAX_FILE_SIZE);
-    if (oversized) { setError(`"${oversized.name}" exceeds 10 MB.`); return; }
+    if (oversized) {
+      setError(`"${oversized.name}" exceeds 10 MB.`);
+      return;
+    }
     const badType = combined.find((f) => !ALLOWED_TYPES.has(f.type));
-    if (badType) { setError(`"${badType.name}" is not an allowed type.`); return; }
+    if (badType) {
+      setError(`"${badType.name}" is not an allowed type.`);
+      return;
+    }
     setFiles(combined);
     setError(null);
   }
@@ -57,7 +75,10 @@ export function AgentReplyForm({ ticketId, totalAttachments }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (isRichTextEmpty(content)) { setError("Write something before sending."); return; }
+    if (isRichTextEmpty(content)) {
+      setError("Write something before sending.");
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
@@ -79,7 +100,9 @@ export function AgentReplyForm({ ticketId, totalAttachments }: Props) {
       }
       setContent("");
       setFiles([]);
-      toast.success(isInternal ? "Internal note added." : "Reply sent to customer.");
+      toast.success(
+        isInternal ? "Internal note added." : "Reply sent to customer."
+      );
       router.refresh();
     } catch {
       setError("Network error. Please try again.");
@@ -90,29 +113,29 @@ export function AgentReplyForm({ ticketId, totalAttachments }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form className="space-y-3" onSubmit={handleSubmit}>
       {/* Toggle: Reply / Internal Note */}
       <div className="flex gap-1 p-1 bg-accent rounded-lg border border-border w-fit">
         <button
-          type="button"
-          onClick={() => setIsInternal(false)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-            !isInternal
-              ? "bg-card text-foreground shadow-sm border border-border"
-              : "text-muted-foreground hover:text-foreground"
+            isInternal
+              ? "text-muted-foreground hover:text-foreground"
+              : "bg-card text-foreground shadow-sm border border-border"
           }`}
+          onClick={() => setIsInternal(false)}
+          type="button"
         >
           <ChatCircleIcon className="size-3.5" />
           Reply to Customer
         </button>
         <button
-          type="button"
-          onClick={() => setIsInternal(true)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
             isInternal
               ? "bg-amber-100 text-amber-800 shadow-sm border border-amber-200"
               : "text-muted-foreground hover:text-foreground"
           }`}
+          onClick={() => setIsInternal(true)}
+          type="button"
         >
           <LockSimpleIcon className="size-3.5" />
           Internal Note
@@ -120,21 +143,35 @@ export function AgentReplyForm({ ticketId, totalAttachments }: Props) {
       </div>
 
       <RichTextEditor
-        value={content}
-        onChange={setContent}
-        placeholder={isInternal ? "Write an internal note (only visible to agents)…" : "Write a reply to the customer…"}
-        tone={isInternal ? "warning" : "default"}
+        cannedResponses={cannedResponses}
         disabled={submitting}
+        onChange={setContent}
+        placeholder={
+          isInternal
+            ? "Write an internal note (only visible to agents)…"
+            : "Write a reply to the customer…"
+        }
+        tone={isInternal ? "warning" : "default"}
+        value={content}
       />
 
       {files.length > 0 && (
         <ul className="space-y-1">
           {files.map((f, i) => (
-            <li key={i} className="flex items-center gap-2 rounded-md bg-accent border border-border px-3 py-2 text-xs">
+            <li
+              className="flex items-center gap-2 rounded-md bg-accent border border-border px-3 py-2 text-xs"
+              key={i}
+            >
               <PaperclipIcon className="size-3.5 text-muted-foreground shrink-0" />
               <span className="text-foreground truncate flex-1">{f.name}</span>
-              <span className="text-muted-foreground shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
-              <button type="button" onClick={() => removeFile(i)} className="text-muted-foreground hover:text-foreground">
+              <span className="text-muted-foreground shrink-0">
+                {(f.size / 1024).toFixed(0)} KB
+              </span>
+              <button
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() => removeFile(i)}
+                type="button"
+              >
                 <XIcon className="size-3.5" />
               </button>
             </li>
@@ -150,32 +187,31 @@ export function AgentReplyForm({ ticketId, totalAttachments }: Props) {
             <PaperclipIcon className="size-3.5" />
             Attach file
             <input
-              ref={fileInputRef}
-              type="file"
-              multiple
               accept=".jpg,.jpeg,.png,.pdf,.zip,.txt"
               className="hidden"
-              onChange={handleFileChange}
               disabled={submitting}
+              multiple
+              onChange={handleFileChange}
+              ref={fileInputRef}
+              type="file"
             />
           </label>
         ) : (
-          <span className="text-xs text-muted-foreground">Attachment limit reached</span>
+          <span className="text-xs text-muted-foreground">
+            Attachment limit reached
+          </span>
         )}
 
         <Button
-          type="submit"
-          disabled={submitting || isRichTextEmpty(content)}
-          className={isInternal
-            ? "bg-amber-600 hover:bg-amber-700 text-white"
-            : "bg-primary hover:bg-primary/90 text-primary-foreground"
+          className={
+            isInternal
+              ? "bg-amber-600 hover:bg-amber-700 text-white"
+              : "bg-primary hover:bg-primary/90 text-primary-foreground"
           }
+          disabled={submitting || isRichTextEmpty(content)}
+          type="submit"
         >
-          {submitting
-            ? "Sending…"
-            : isInternal
-            ? "Add Note"
-            : "Send Reply"}
+          {submitting ? "Sending…" : isInternal ? "Add Note" : "Send Reply"}
         </Button>
       </div>
     </form>

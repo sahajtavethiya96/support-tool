@@ -21,3 +21,14 @@ export const ticketCategories = pgTable("ticket_categories", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const ticketPriorities = pgTable("ticket_priorities", {
+  id: text("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  label: text("label").notNull(),
+  color: text("color").notNull().default("slate"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

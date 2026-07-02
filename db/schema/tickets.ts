@@ -20,6 +20,7 @@ export const tickets = pgTable(
     description: text("description").notNull(),
     category: text("category").notNull(),
     status: text("status").notNull().default("open"),
+    priority: text("priority").notNull().default("normal"),
     customerName: text("customer_name").notNull(),
     customerEmail: text("customer_email").notNull(),
     customerToken: text("customer_token").notNull().unique(),
@@ -47,6 +48,7 @@ export const tickets = pgTable(
     index("tickets_assigned_agent_id_idx").on(t.assignedAgentId),
     index("tickets_created_at_idx").on(t.createdAt),
     index("tickets_awaiting_reply_idx").on(t.awaitingReply),
+    index("tickets_priority_idx").on(t.priority),
   ]
 );
 

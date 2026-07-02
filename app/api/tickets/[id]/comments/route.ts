@@ -1,19 +1,26 @@
 import { createId } from "@paralleldrive/cuid2";
-import { eq, and, or, count, sql } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { and, count, eq, or, sql } from "drizzle-orm";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { ADMIN_ROLE, AGENT_ROLE } from "@/config/platform";
+import {
+  ticketActivity,
+  ticketAttachments,
+  ticketComments,
+  tickets,
+  user,
+} from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { tickets, ticketComments, ticketAttachments, ticketActivity, user } from "@/db/schema";
-import { ADMIN_ROLE, AGENT_ROLE } from "@/config/platform";
-import { isClosedStatusSlug } from "@/lib/ticket-config";
-import { storage } from "@/lib/storage";
 import { enqueueEmail } from "@/lib/email";
 import { ticketRepliedTemplate } from "@/lib/email/templates/ticket-replied";
+import { env } from "@/lib/env";
 import { createNotifications } from "@/lib/notifications";
 import { publishPushToUsers } from "@/lib/push";
-import { richTextToPlainText, isRichTextEmpty } from "@/lib/rich-text";
-import { env } from "@/lib/env";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { isRichTextEmpty, richTextToPlainText } from "@/lib/rich-text";
+import { storage } from "@/lib/storage";
+import { isClosedStatusSlug } from "@/lib/ticket-config";
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
@@ -45,7 +52,10 @@ export async function POST(
     .filter((v): v is File => v instanceof File && v.size > 0);
 
   if (!content || isRichTextEmpty(content)) {
-    return NextResponse.json({ error: "Content is required." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Content is required." },
+      { status: 400 }
+    );
   }
 
   // Plain-text form of the (Tiptap JSON) reply, for email/notification/push previews.
@@ -56,18 +66,23 @@ export async function POST(
   let authorRole: "customer" | "agent" | "admin";
   let authorId: string | undefined;
   let isInternal = false;
-  let ticketData: {
-    customerName: string;
-    customerEmail: string;
-    customerToken: string;
-    ticketNumber: number;
-    subject: string;
-    assignedAgentId: string | null;
-  } | undefined;
+  let ticketData:
+    | {
+        customerName: string;
+        customerEmail: string;
+        customerToken: string;
+        ticketNumber: number;
+        subject: string;
+        assignedAgentId: string | null;
+      }
+    | undefined;
 
   const session = await auth.api.getSession({ headers: request.headers });
 
-  if (session?.user && (session.user.role === "agent" || session.user.role === "admin")) {
+  if (
+    session?.user &&
+    (session.user.role === "agent" || session.user.role === "admin")
+  ) {
     // Agent/admin comment
     authorId = session.user.id;
     authorName = session.user.name ?? session.user.email;
@@ -91,10 +106,26 @@ export async function POST(
       return NextResponse.json({ error: "Ticket not found." }, { status: 404 });
     }
     if (await isClosedStatusSlug(ticket.status)) {
-      return NextResponse.json({ error: "Cannot comment on a closed ticket." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Cannot comment on a closed ticket." },
+        { status: 400 }
+      );
     }
     ticketData = ticket;
   } else if (token) {
+    const { allowed } = await checkRateLimit({
+      action: "ticket_comment",
+      key: getClientIp(request),
+      limit: 20,
+      windowMinutes: 10,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429 }
+      );
+    }
+
     const [ticket] = await db
       .select({
         status: tickets.status,
@@ -112,7 +143,10 @@ export async function POST(
       return NextResponse.json({ error: "Ticket not found." }, { status: 404 });
     }
     if (await isClosedStatusSlug(ticket.status)) {
-      return NextResponse.json({ error: "Cannot reply to a closed ticket." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Cannot reply to a closed ticket." },
+        { status: 400 }
+      );
     }
     authorName = ticket.customerName;
     authorRole = "customer";
@@ -131,7 +165,9 @@ export async function POST(
     const remaining = MAX_ATTACHMENTS_PER_TICKET - existingCount;
     if (attachmentFiles.length > remaining) {
       return NextResponse.json(
-        { error: `Only ${remaining} more attachment(s) allowed on this ticket.` },
+        {
+          error: `Only ${remaining} more attachment(s) allowed on this ticket.`,
+        },
         { status: 400 }
       );
     }
@@ -265,9 +301,13 @@ export async function POST(
         const [agent] = await db
           .select({ id: user.id })
           .from(user)
-          .where(and(eq(user.id, ticketData.assignedAgentId), eq(user.banned, false)))
+          .where(
+            and(eq(user.id, ticketData.assignedAgentId), eq(user.banned, false))
+          )
           .limit(1);
-        if (agent) recipientIds = [agent.id];
+        if (agent) {
+          recipientIds = [agent.id];
+        }
       } else {
         const agents = await db
           .select({ id: user.id })
@@ -305,6 +345,9 @@ export async function POST(
       await storage.delete(a.storageKey).catch(() => undefined);
     }
     console.error("[POST /api/tickets/[id]/comments]", err);
-    return NextResponse.json({ error: "Failed to add comment." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to add comment." },
+      { status: 500 }
+    );
   }
 }

@@ -212,3 +212,16 @@ Two features were added that were not in the initial phases:
 - One-click deploy templates (Railway/Render/Fly) — documented generically in the README,
   but no provider button/manifest files yet.
 - Broader mobile-responsiveness pass on the agent ticket detail two-column layout.
+- CSAT (post-close satisfaction rating) and a CSV export of tickets — deferred,
+  no implementation plan written yet.
+- `GET /api/health` endpoint for Docker healthchecks / uptime monitors — deferred,
+  no implementation plan written yet.
+
+### Recently completed
+
+See [docs/plans/](./plans/00-overview.md) for the full write-up of each item.
+Completed: the "My Tickets" list email (was a stub), Postgres-backed rate
+limiting on public routes, deleting the unused `GET /api/tickets` stub,
+bulk ticket actions, attachment deletion, canned/saved replies, ticket
+priority, and the audit-log viewer (`/admin/audit-log`). Inbound
+email-to-ticket was considered and intentionally skipped for now.

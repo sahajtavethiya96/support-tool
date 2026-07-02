@@ -106,6 +106,7 @@ Built with react-email. Templates live in `lib/email/templates/`.
 | Ticket created | `lib/email/templates/ticket-created.tsx` |
 | Agent replied | `lib/email/templates/ticket-replied.tsx` |
 | Ticket closed | `lib/email/templates/ticket-closed.tsx` |
+| My tickets list | `lib/email/templates/my-tickets-list.tsx` |
 
 Each template exports an async function that accepts typed props and returns `{ html, text }`.
 

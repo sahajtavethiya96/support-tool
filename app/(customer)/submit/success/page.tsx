@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { CheckCircleIcon, TicketIcon } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { PRODUCT_NAME } from "@/config/platform";
 
@@ -15,11 +15,13 @@ export default async function SubmitSuccessPage({ searchParams }: Props) {
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-sand sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
+          <Link className="flex items-center gap-2.5" href="/">
             <div className="size-7 rounded-md bg-bark flex items-center justify-center">
               <TicketIcon className="size-4 text-cream" weight="fill" />
             </div>
-            <span className="font-semibold text-bark text-sm">{PRODUCT_NAME}</span>
+            <span className="font-semibold text-bark text-sm">
+              {PRODUCT_NAME}
+            </span>
           </Link>
         </div>
       </header>
@@ -50,7 +52,11 @@ export default async function SubmitSuccessPage({ searchParams }: Props) {
           <Button asChild className="bg-bark hover:bg-bark/90 text-white">
             <Link href="/submit">Submit Another Ticket</Link>
           </Button>
-          <Button asChild variant="outline" className="border-sand text-bark hover:bg-cream">
+          <Button
+            asChild
+            className="border-sand text-bark hover:bg-cream"
+            variant="outline"
+          >
             <Link href="/my-tickets">View My Tickets</Link>
           </Button>
         </div>

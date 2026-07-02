@@ -1,10 +1,12 @@
 "use client";
 
 import {
+  ChatTextIcon,
   CodeBlockIcon,
   CodeIcon,
   ListBulletsIcon,
   ListNumbersIcon,
+  MagnifyingGlassIcon,
   QuotesIcon,
   TextBIcon,
   TextItalicIcon,
@@ -14,7 +16,12 @@ import {
 import Placeholder from "@tiptap/extension-placeholder";
 import { type Editor, EditorContent, useEditor } from "@tiptap/react";
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import {
   baseRichTextExtensions,
@@ -22,7 +29,15 @@ import {
 } from "./rich-text-extensions";
 import { SlashCommand } from "./slash-command";
 
+export interface CannedResponseOption {
+  content: string;
+  id: string;
+  title: string;
+}
+
 interface Props {
+  /** When provided (agent replies only), shows a toolbar button to insert a saved reply template. */
+  cannedResponses?: CannedResponseOption[];
   className?: string;
   disabled?: boolean;
   onChange: (json: string) => void;
@@ -66,12 +81,102 @@ function ToolbarButton({
   );
 }
 
+function insertCannedResponse(editor: Editor, contentJson: string) {
+  const parsed = parseRichTextContent(contentJson);
+  if (typeof parsed === "string") {
+    editor.chain().focus().insertContent(parsed).run();
+    return;
+  }
+  const doc = parsed as { content?: unknown[] };
+  editor
+    .chain()
+    .focus()
+    .insertContent(doc.content ?? [])
+    .run();
+}
+
+function CannedResponsePicker({
+  editor,
+  responses,
+}: {
+  editor: Editor;
+  responses: CannedResponseOption[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q
+      ? responses.filter((r) => r.title.toLowerCase().includes(q))
+      : responses;
+  }, [responses, query]);
+
+  return (
+    <Popover
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) {
+          setQuery("");
+        }
+      }}
+      open={open}
+    >
+      <PopoverTrigger asChild>
+        <button
+          className="flex size-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          onMouseDown={(e) => e.preventDefault()}
+          title="Insert canned response"
+          type="button"
+        >
+          <ChatTextIcon className="size-4" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 p-0">
+        <div className="flex items-center gap-2 border-b border-border px-2.5">
+          <MagnifyingGlassIcon className="size-4 shrink-0 text-muted-foreground" />
+          <input
+            className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search responses…"
+            value={query}
+          />
+        </div>
+        <div className="max-h-60 overflow-y-auto p-1">
+          {filtered.length === 0 ? (
+            <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+              No canned responses
+            </p>
+          ) : (
+            filtered.map((r) => (
+              <button
+                className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-accent"
+                key={r.id}
+                onClick={() => {
+                  insertCannedResponse(editor, r.content);
+                  setOpen(false);
+                  setQuery("");
+                }}
+                type="button"
+              >
+                {r.title}
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function Toolbar({
   editor,
   tone,
+  cannedResponses,
 }: {
   editor: Editor;
   tone: "default" | "warning";
+  cannedResponses?: CannedResponseOption[];
 }) {
   const divider = (
     <div
@@ -153,6 +258,12 @@ function Toolbar({
       >
         <QuotesIcon className="size-4" />
       </ToolbarButton>
+      {cannedResponses && cannedResponses.length > 0 && (
+        <>
+          {divider}
+          <CannedResponsePicker editor={editor} responses={cannedResponses} />
+        </>
+      )}
     </div>
   );
 }
@@ -164,6 +275,7 @@ export function RichTextEditor({
   disabled = false,
   tone = "default",
   className,
+  cannedResponses,
 }: Props) {
   const editor = useEditor({
     extensions: [
@@ -216,7 +328,7 @@ export function RichTextEditor({
         className
       )}
     >
-      <Toolbar editor={editor} tone={tone} />
+      <Toolbar cannedResponses={cannedResponses} editor={editor} tone={tone} />
       <EditorContent editor={editor} />
     </div>
   );
