@@ -21,6 +21,7 @@ import type {
 } from "@/lib/ticket-config";
 import { COLOR_BADGE, formatTicketDateTime } from "@/lib/tickets";
 import { getInitials } from "@/lib/utils";
+import { SidebarCard } from "./sidebar-card";
 
 type Agent = { id: string; name: string | null; email: string };
 
@@ -239,11 +240,7 @@ export function TicketInfoSidebar({
   return (
     <aside className="space-y-5">
       {/* Ticket Info */}
-      <div className="bg-card rounded-xl border border-border shadow-soft p-4 space-y-4">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          Ticket Info
-        </h3>
-
+      <SidebarCard contentClassName="space-y-4" title="Ticket Info">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Number</span>
@@ -342,13 +339,10 @@ export function TicketInfoSidebar({
         )}
 
         {error && <p className="text-xs text-red-600">{error}</p>}
-      </div>
+      </SidebarCard>
 
       {/* Customer Info */}
-      <div className="bg-card rounded-xl border border-border shadow-soft p-4 space-y-3">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          Customer
-        </h3>
+      <SidebarCard defaultOpen={false} title="Customer">
         <div className="flex items-start gap-2.5">
           <div className="size-7 rounded-full bg-accent border border-border flex items-center justify-center text-xs font-medium text-foreground shrink-0">
             {getInitials(ticket.customerName)}
@@ -362,13 +356,14 @@ export function TicketInfoSidebar({
             </p>
           </div>
         </div>
-      </div>
+      </SidebarCard>
 
       {/* Assigned Agent */}
-      <div className="bg-card rounded-xl border border-border shadow-soft p-4 space-y-3">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          Assigned Agent
-        </h3>
+      <SidebarCard
+        contentClassName="space-y-3"
+        defaultOpen={false}
+        title="Assigned Agent"
+      >
         <SearchableSelect
           disabled={loading}
           onValueChange={handleAssignChange}
@@ -392,14 +387,14 @@ export function TicketInfoSidebar({
             Assign to me
           </Button>
         )}
-      </div>
+      </SidebarCard>
 
       {/* Activity */}
-      <div className="bg-card rounded-xl border border-border shadow-soft p-4 space-y-3">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-          <ClockIcon className="size-3.5" />
-          Activity
-        </h3>
+      <SidebarCard
+        defaultOpen={false}
+        icon={<ClockIcon className="size-3.5" />}
+        title="Activity"
+      >
         <div className="space-y-3">
           {activity.map((a) => {
             const label = ACTION_LABELS[a.action]?.(a) ?? a.action;
@@ -416,14 +411,16 @@ export function TicketInfoSidebar({
             );
           })}
         </div>
-      </div>
+      </SidebarCard>
 
       {/* Admin: Delete Ticket */}
       {isAdmin && (
-        <div className="bg-card rounded-xl border border-red-200 p-4">
-          <h3 className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">
-            Danger Zone
-          </h3>
+        <SidebarCard
+          className="border-red-200"
+          defaultOpen={false}
+          title="Danger Zone"
+          titleClassName="text-red-600"
+        >
           <Button
             className="w-full border-red-200 text-red-600 hover:bg-red-50 text-xs flex items-center gap-1.5"
             onClick={() => setDeleteOpen(true)}
@@ -433,7 +430,7 @@ export function TicketInfoSidebar({
             <TrashIcon className="size-3.5" />
             Delete Ticket
           </Button>
-        </div>
+        </SidebarCard>
       )}
 
       {/* Close confirmation dialog */}

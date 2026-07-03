@@ -6,17 +6,23 @@
 pnpm install
 cp .env.example .env
 pnpm db:local        # start local embedded postgres (dev only)
-pnpm setup           # validate env, migrate, seed defaults, create first admin
+pnpm setup           # validate env, migrate, seed defaults
+pnpm create:admin you@example.com "Your Name" "a-strong-password"
 pnpm dev             # start Next.js + worker concurrently
 ```
 
 Open `http://localhost:3000`.
 
-`pnpm setup` is the guided one-shot bootstrap — it runs `db:migrate` + `db:seed`,
-then creates the first admin if `FIRST_ADMIN_EMAIL` (and optionally
-`FIRST_ADMIN_NAME` / `FIRST_ADMIN_PASSWORD`) is set in `.env`. Safe to re-run.
+`pnpm setup` is the guided bootstrap for everything except the admin account —
+it runs `db:migrate` + `db:seed`. Safe to re-run.
 
-If you'd rather do it manually, or need to create/promote an account later:
+Creating the first admin is a deliberate, separate step (`pnpm create:admin`)
+rather than automatic — that way you get immediate success/failure feedback
+right in your terminal, instead of it happening silently inside a detached
+background process (e.g. Docker's `migrate` service) where a failure could
+easily go unnoticed.
+
+To create or promote an account:
 
 ```bash
 # Create a brand-new admin with a password — signs in immediately, no SMTP needed

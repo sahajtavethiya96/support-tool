@@ -1,7 +1,6 @@
 "use client";
 
 import { TrashIcon, WarningCircleIcon } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -16,9 +15,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { TicketStatus } from "@/lib/ticket-config";
-import { COLOR_BADGE, formatTicketDate } from "@/lib/tickets";
-import { getInitials } from "@/lib/utils";
+import type { TicketPriority, TicketStatus } from "@/lib/ticket-config";
+import { TicketRow } from "./ticket-row";
 
 interface Row {
   assignedAgentId: string | null;
@@ -50,6 +48,7 @@ export function TicketsTable({
   categoryMap,
   priorityMap,
   statuses,
+  priorities,
   agents,
   isAdmin,
 }: {
@@ -58,6 +57,7 @@ export function TicketsTable({
   categoryMap: Record<string, ColorRow | undefined>;
   priorityMap: Record<string, ColorRow | undefined>;
   statuses: TicketStatus[];
+  priorities: TicketPriority[];
   agents: Agent[];
   isAdmin: boolean;
 }) {
@@ -219,19 +219,19 @@ export function TicketsTable({
                 <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Subject
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-32 hidden sm:table-cell">
+                <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-36 hidden sm:table-cell">
                   Status
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-36 hidden md:table-cell">
                   Category
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-24 hidden md:table-cell">
+                <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-28 hidden md:table-cell">
                   Priority
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-40 hidden lg:table-cell">
                   Customer
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-24 hidden lg:table-cell">
+                <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-36 hidden lg:table-cell">
                   Assigned
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-28 hidden xl:table-cell">
@@ -241,89 +241,19 @@ export function TicketsTable({
             </thead>
             <tbody className="divide-y divide-border/60">
               {rows.map((row) => (
-                <tr
-                  className={`hover:bg-accent/40 transition-colors group ${
-                    selected.has(row.id) ? "bg-primary/5" : ""
-                  }`}
+                <TicketRow
+                  agents={agents}
+                  categoryMap={categoryMap}
+                  isAdmin={isAdmin}
                   key={row.id}
-                >
-                  {isAdmin && (
-                    <td className="px-4 py-3">
-                      <Checkbox
-                        checked={selected.has(row.id)}
-                        onCheckedChange={() => toggleOne(row.id)}
-                      />
-                    </td>
-                  )}
-                  <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
-                    #{row.ticketNumber}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link
-                      className="font-medium text-foreground hover:underline line-clamp-1"
-                      href={`/tickets/${row.id}`}
-                    >
-                      {row.subject}
-                    </Link>
-                    {/* Mobile: show status inline */}
-                    <div className="flex gap-1.5 mt-1 sm:hidden">
-                      <span
-                        className={`inline-flex items-center whitespace-nowrap rounded border px-1.5 py-0.5 text-xs font-medium ${COLOR_BADGE[statusMap[row.status]?.color ?? "slate"] ?? ""}`}
-                      >
-                        {statusMap[row.status]?.label ?? row.status}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 hidden sm:table-cell">
-                    <span
-                      className={`inline-flex items-center whitespace-nowrap rounded border px-2 py-0.5 text-xs font-medium ${COLOR_BADGE[statusMap[row.status]?.color ?? "slate"] ?? ""}`}
-                    >
-                      {statusMap[row.status]?.label ?? row.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 hidden md:table-cell">
-                    <span
-                      className={`inline-flex items-center whitespace-nowrap rounded border px-2 py-0.5 text-xs font-medium ${COLOR_BADGE[categoryMap[row.category]?.color ?? "slate"] ?? ""}`}
-                    >
-                      {categoryMap[row.category]?.label ?? row.category}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 hidden md:table-cell">
-                    <span
-                      className={`inline-flex items-center whitespace-nowrap rounded border px-2 py-0.5 text-xs font-medium ${COLOR_BADGE[priorityMap[row.priority]?.color ?? "slate"] ?? ""}`}
-                    >
-                      {priorityMap[row.priority]?.label ?? row.priority}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 hidden lg:table-cell">
-                    <span
-                      className="block max-w-36 truncate text-muted-foreground text-xs"
-                      title={row.customerName}
-                    >
-                      {row.customerName}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 hidden lg:table-cell">
-                    {row.assignedAgentName ? (
-                      <div
-                        className="size-7 rounded-full bg-primary/10 border border-border flex items-center justify-center text-2xs font-semibold text-foreground"
-                        title={row.assignedAgentName}
-                      >
-                        {getInitials(row.assignedAgentName)}
-                      </div>
-                    ) : (
-                      <span
-                        className="size-7 rounded-full border border-dashed border-border flex items-center justify-center text-muted-foreground"
-                        title="Unassigned"
-                      >
-                        —
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs hidden xl:table-cell whitespace-nowrap">
-                    {formatTicketDate(row.updatedAt)}
-                  </td>
-                </tr>
+                  onToggleSelect={() => toggleOne(row.id)}
+                  priorities={priorities}
+                  priorityMap={priorityMap}
+                  row={row}
+                  selected={selected.has(row.id)}
+                  statuses={statuses}
+                  statusMap={statusMap}
+                />
               ))}
             </tbody>
           </table>

@@ -23,6 +23,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { isRichTextEmpty } from "@/lib/rich-text";
 import { cn } from "@/lib/utils";
 import {
   baseRichTextExtensions,
@@ -44,10 +45,16 @@ interface Props {
   /** When provided (agent replies only), shows a toolbar button to insert a saved reply template. */
   cannedResponses?: CannedResponseOption[];
   className?: string;
+  /** Chat-style compact mode: shorter empty height, toolbar hidden until focused or non-empty. */
+  compact?: boolean;
   disabled?: boolean;
+  /** Called when the editor loses focus. */
+  onBlur?: () => void;
   onChange: (json: string) => void;
   /** When provided, pasting or dropping files onto the editor hands them off here instead of inserting them into the document (there's no image extension — files become attachments, not embedded content). */
   onFilesDropped?: (files: File[]) => void;
+  /** Called when the editor gains focus. */
+  onFocus?: () => void;
   /** When provided, Enter sends (Shift+Enter still inserts a newline) — pass this on chat-style reply composers, not on template editors like canned responses. */
   onSubmit?: () => void;
   placeholder?: string;
@@ -282,15 +289,19 @@ export function RichTextEditor({
   value,
   onChange,
   onFilesDropped,
+  onBlur,
+  onFocus,
   onSubmit,
   placeholder = "Write a reply…",
   disabled = false,
   tone = "default",
+  compact = false,
   className,
   cannedResponses,
   ref,
 }: Props) {
   const [isDragOver, setIsDragOver] = useState(false);
+  const [focused, setFocused] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -300,9 +311,20 @@ export function RichTextEditor({
     ],
     content: parseRichTextContent(value),
     onUpdate: ({ editor }) => onChange(JSON.stringify(editor.getJSON())),
+    onFocus: () => {
+      setFocused(true);
+      onFocus?.();
+    },
+    onBlur: () => {
+      setFocused(false);
+      onBlur?.();
+    },
     editorProps: {
       attributes: {
-        class: "tiptap-content focus:outline-none min-h-[96px] px-4 py-3",
+        class: cn(
+          "tiptap-content focus:outline-none px-4 py-3",
+          compact ? "min-h-9 max-h-40 overflow-y-auto" : "min-h-[96px]"
+        ),
       },
       handleKeyDown: (view, event) => {
         if (
@@ -396,7 +418,13 @@ export function RichTextEditor({
       }}
       onDrop={() => setIsDragOver(false)}
     >
-      <Toolbar cannedResponses={cannedResponses} editor={editor} tone={tone} />
+      {(!compact || focused || !isRichTextEmpty(value)) && (
+        <Toolbar
+          cannedResponses={cannedResponses}
+          editor={editor}
+          tone={tone}
+        />
+      )}
       <EditorContent editor={editor} />
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowUpIcon,
   ChatCircleIcon,
   LockSimpleIcon,
   PaperclipIcon,
@@ -15,6 +16,8 @@ import {
 } from "@/components/common/rich-text-editor";
 import { Button } from "@/components/ui/button";
 import { isRichTextEmpty } from "@/lib/rich-text";
+import { scrollChatToBottom } from "@/lib/scroll-chat";
+import { cn } from "@/lib/utils";
 
 const ALLOWED_TYPES = new Set([
   "image/jpeg",
@@ -46,8 +49,13 @@ export function AgentReplyForm({
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [composing, setComposing] = useState(false);
 
   const maxNewFiles = Math.max(0, 5 - totalAttachments);
+  // Keep the Reply/Internal Note toggle visible while actively composing —
+  // collapse it back to a single-line input only once fully idle and empty.
+  const showComposeControls =
+    composing || isInternal || files.length > 0 || !isRichTextEmpty(content);
 
   function addFiles(newFiles: File[]) {
     const combined = [...files, ...newFiles];
@@ -120,6 +128,7 @@ export function AgentReplyForm({
         isInternal ? "Internal note added." : "Reply sent to customer."
       );
       router.refresh();
+      scrollChatToBottom();
     } catch {
       setError("Network error. Please try again.");
       toast.error("Network error. Please try again.");
@@ -130,49 +139,37 @@ export function AgentReplyForm({
 
   return (
     <form className="space-y-3" onSubmit={handleSubmit} ref={formRef}>
-      {/* Toggle: Reply / Internal Note */}
-      <div className="flex gap-1 p-1 bg-accent rounded-lg border border-border w-fit">
-        <button
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-            isInternal
-              ? "text-muted-foreground hover:text-foreground"
-              : "bg-card text-foreground shadow-sm border border-border"
-          }`}
-          onClick={() => setIsInternal(false)}
-          type="button"
-        >
-          <ChatCircleIcon className="size-3.5" />
-          Reply to Customer
-        </button>
-        <button
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-            isInternal
-              ? "bg-amber-100 text-amber-800 shadow-sm border border-amber-200"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setIsInternal(true)}
-          type="button"
-        >
-          <LockSimpleIcon className="size-3.5" />
-          Internal Note
-        </button>
-      </div>
-
-      <RichTextEditor
-        cannedResponses={cannedResponses}
-        disabled={submitting}
-        onChange={setContent}
-        onFilesDropped={maxNewFiles > 0 ? addFiles : undefined}
-        onSubmit={handleEnterSubmit}
-        placeholder={
-          isInternal
-            ? "Write an internal note (only visible to agents)…"
-            : "Write a reply to the customer…"
-        }
-        ref={editorRef}
-        tone={isInternal ? "warning" : "default"}
-        value={content}
-      />
+      {/* Toggle: Reply / Internal Note — hidden while idle, shown while composing */}
+      {showComposeControls && (
+        <div className="flex gap-1 p-1 bg-accent rounded-lg border border-border w-fit">
+          <button
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              isInternal
+                ? "text-muted-foreground hover:text-foreground"
+                : "bg-card text-foreground shadow-sm border border-border"
+            }`}
+            onClick={() => setIsInternal(false)}
+            onMouseDown={(e) => e.preventDefault()}
+            type="button"
+          >
+            <ChatCircleIcon className="size-3.5" />
+            Reply to Customer
+          </button>
+          <button
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              isInternal
+                ? "bg-amber-100 text-amber-800 shadow-sm border border-amber-200"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setIsInternal(true)}
+            onMouseDown={(e) => e.preventDefault()}
+            type="button"
+          >
+            <LockSimpleIcon className="size-3.5" />
+            Internal Note
+          </button>
+        </div>
+      )}
 
       {files.length > 0 && (
         <ul className="space-y-1">
@@ -200,37 +197,62 @@ export function AgentReplyForm({
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      <div className="flex items-center justify-between gap-3">
-        {maxNewFiles > 0 ? (
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer">
-            <PaperclipIcon className="size-3.5" />
-            Attach file
-            <input
-              accept=".jpg,.jpeg,.png,.pdf,.zip,.txt"
-              className="hidden"
-              disabled={submitting}
-              multiple
-              onChange={handleFileChange}
-              ref={fileInputRef}
-              type="file"
-            />
-          </label>
-        ) : (
-          <span className="text-xs text-muted-foreground">
-            Attachment limit reached
-          </span>
-        )}
+      {/* Compose row */}
+      <div className="flex items-end gap-2">
+        <label
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-md border border-border transition-colors",
+            maxNewFiles > 0 && !submitting
+              ? "text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
+              : "text-muted-foreground/40 cursor-not-allowed"
+          )}
+          title={maxNewFiles > 0 ? "Attach file" : "Attachment limit reached"}
+        >
+          <PaperclipIcon className="size-4" />
+          <input
+            accept=".jpg,.jpeg,.png,.pdf,.zip,.txt"
+            className="hidden"
+            disabled={submitting || maxNewFiles === 0}
+            multiple
+            onChange={handleFileChange}
+            ref={fileInputRef}
+            type="file"
+          />
+        </label>
+
+        <div className="flex-1 min-w-0">
+          <RichTextEditor
+            cannedResponses={cannedResponses}
+            compact
+            disabled={submitting}
+            onBlur={() => setComposing(false)}
+            onChange={setContent}
+            onFilesDropped={maxNewFiles > 0 ? addFiles : undefined}
+            onFocus={() => setComposing(true)}
+            onSubmit={handleEnterSubmit}
+            placeholder={
+              isInternal
+                ? "Write an internal note (only visible to agents)…"
+                : "Write a reply to the customer…"
+            }
+            ref={editorRef}
+            tone={isInternal ? "warning" : "default"}
+            value={content}
+          />
+        </div>
 
         <Button
-          className={
+          className={cn(
+            "size-10 shrink-0 rounded-full p-0",
             isInternal
               ? "bg-amber-600 hover:bg-amber-700 text-white"
               : "bg-primary hover:bg-primary/90 text-primary-foreground"
-          }
+          )}
           disabled={submitting || isRichTextEmpty(content)}
+          title={isInternal ? "Add Note" : "Send Reply"}
           type="submit"
         >
-          {submitting ? "Sending…" : isInternal ? "Add Note" : "Send Reply"}
+          <ArrowUpIcon className="size-4" weight="bold" />
         </Button>
       </div>
     </form>

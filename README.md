@@ -88,9 +88,6 @@ Open `http://localhost:3000`.
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `APP_SECRET` | Yes | Random secret for signing sessions (min 32 chars) |
 | `NEXT_PUBLIC_APP_URL` | Yes | Public URL of your deployment (e.g. `https://support.yourco.com`) |
-| `FIRST_ADMIN_EMAIL` | No | If set, `pnpm setup` creates this admin on first run |
-| `FIRST_ADMIN_NAME` | No | Display name for the first admin (default: `Admin`) |
-| `FIRST_ADMIN_PASSWORD` | No | Password for the first admin — lets them sign in immediately with no SMTP configured. Omit for a magic-link-only admin. |
 | `SMTP_HOST` | No | SMTP server hostname (omit to log emails instead of sending) |
 | `SMTP_PORT` | No | SMTP port (default: 587) |
 | `SMTP_USER` | No | SMTP username |
@@ -126,13 +123,12 @@ and the pg-boss background worker.
 ```bash
 cp .env.example .env
 # Set APP_SECRET (32+ chars) and NEXT_PUBLIC_APP_URL.
-# Optionally set FIRST_ADMIN_EMAIL to auto-create your admin user.
 docker compose up -d
 ```
 
 On startup a one-shot `migrate` service runs database migrations and seeds the default
-statuses & categories (and creates the first admin if `FIRST_ADMIN_EMAIL` is set) before
-the app and worker start. The app is served on **http://localhost:3000**.
+statuses & categories before the app and worker start. The app is served on
+**http://localhost:3000**.
 
 `DATABASE_URL` is wired automatically to the bundled Postgres — you don't need to set it
 in `.env` for Docker. Uploaded attachments persist in the `uploads` volume.
@@ -142,11 +138,16 @@ docker compose logs -f app worker     # follow logs
 docker compose down                   # stop (data persists in volumes)
 ```
 
-To create an admin after the fact:
+Then create your first admin — this is a deliberate, explicit step (not automatic on
+startup) so you get immediate success/failure feedback right in your terminal, instead
+of a failure silently happening inside a detached background service:
 
 ```bash
 docker compose run --rm app pnpm create:admin you@example.com "Your Name" "a-strong-password"
 ```
+
+Sign in at `/login` with that email and password. Omit the password argument to create a
+magic-link-only admin instead (requires SMTP to be configured to sign in).
 
 **Enabling Pusher Beams (OS push) with Docker:** the instance id is baked into the
 client bundle at build time, so pass it as a build arg, then set the secret at runtime:
@@ -185,7 +186,8 @@ docker compose up -d
 3. Build and initialise:
    ```bash
    pnpm build
-   pnpm setup            # migrations + seed (+ first admin if FIRST_ADMIN_EMAIL set)
+   pnpm setup            # migrations + seed
+   pnpm create:admin you@example.com "Your Name" "a-strong-password"
    ```
 4. Run **two** long-lived processes (e.g. with systemd, PM2, or `screen`):
    ```bash

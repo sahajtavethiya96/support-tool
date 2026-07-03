@@ -147,7 +147,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
                     {formatTicketDateTime(ticket.createdAt)}
                   </span>
                 </div>
-                <h1 className="text-lg font-semibold text-foreground">
+                <h1 className="text-lg font-semibold text-foreground wrap-break-word">
                   {ticket.subject}
                 </h1>
               </div>
@@ -178,7 +178,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
                   {formatTicketDateTime(ticket.createdAt)}
                 </span>
               </div>
-              <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+              <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed wrap-break-word">
                 {ticket.description}
               </p>
               {ticketLevelAttachments.length > 0 && (
@@ -264,14 +264,18 @@ export default async function AgentTicketDetailPage({ params }: Props) {
             );
           })}
 
-          {/* Reply form */}
+          {/* Reply form — stays pinned to the bottom of the screen while scrolling.
+              The transparent pt-4 on the sticky wrapper keeps a visible gap above
+              the card as messages scroll behind it, instead of butting up flush. */}
           {isOpen && (
-            <div className="bg-card rounded-xl border border-border shadow-soft p-5">
-              <AgentReplyForm
-                cannedResponses={cannedResponses}
-                ticketId={ticket.id}
-                totalAttachments={attachments.length}
-              />
+            <div className="sticky bottom-0 z-10 pt-4">
+              <div className="bg-card rounded-xl border border-border shadow-soft p-5">
+                <AgentReplyForm
+                  cannedResponses={cannedResponses}
+                  ticketId={ticket.id}
+                  totalAttachments={attachments.length}
+                />
+              </div>
             </div>
           )}
 

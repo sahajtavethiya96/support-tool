@@ -96,8 +96,12 @@ First impression matters a lot for OSS adoption — add 2-4 screenshots
 
 ## ✅ Already in good shape (confirmed during the audit, no action needed)
 
-- `.env.example` — complete, matches `lib/env.ts`'s schema exactly (now
-  also includes `FIRST_ADMIN_PASSWORD`, added alongside password login).
+- `.env.example` — complete, matches `lib/env.ts`'s schema exactly. (Briefly
+  gained `FIRST_ADMIN_EMAIL`/`NAME`/`PASSWORD` alongside password login, then
+  removed again — first-admin creation is a deliberate manual step,
+  `pnpm create:admin`, not automatic on startup. A silent failure inside a
+  detached `docker compose up -d` service is worse than an explicit command
+  with visible terminal output — see `docs/commands.md`.)
 - `Dockerfile`, `Dockerfile.worker`, `docker-compose.yml`, `.dockerignore`
   — all present and functional.
 - Admin bootstrap scripts (`scripts/setup.ts`, `scripts/create-admin.ts`,

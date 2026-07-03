@@ -236,7 +236,7 @@ export default async function TicketDetailPage({
                     {categoryMap[ticket.category]?.label ?? ticket.category}
                   </span>
                 </div>
-                <h1 className="text-xl font-semibold text-bark leading-snug">
+                <h1 className="text-xl font-semibold text-bark leading-snug wrap-break-word">
                   {ticket.subject}
                 </h1>
                 <p className="text-xs text-stone mt-1">
@@ -273,7 +273,7 @@ export default async function TicketDetailPage({
                   {getInitials(ticket.customerName)}
                 </div>
               </div>
-              <p className="text-sm text-bark whitespace-pre-wrap leading-relaxed">
+              <p className="text-sm text-bark whitespace-pre-wrap leading-relaxed wrap-break-word">
                 {ticket.description}
               </p>
 
