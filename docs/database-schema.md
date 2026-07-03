@@ -107,6 +107,25 @@ ticket_categories
 
 ---
 
+### `api_keys`
+
+Caller identity for the public API (`app/api/v1/*`) — a third auth mode
+alongside agent/admin sessions and customer ticket tokens. Managed from
+`/admin/api-keys`. See `docs/api.md` for the API itself.
+
+```
+api_keys
+├── id                text PK (cuid2)
+├── name              text NOT NULL           ← admin-chosen label, e.g. "Marketing site"
+├── key_prefix        text NOT NULL           ← first 16 chars, shown in the admin UI
+├── key_hash          text NOT NULL UNIQUE    ← sha256 of the full key; the raw key is never stored
+├── created_by_id     text → user.id (SET NULL on delete), nullable
+├── created_by_name   text NOT NULL
+├── last_used_at      timestamp with time zone, nullable
+├── revoked_at        timestamp with time zone, nullable   ← soft revoke, row is kept for audit history
+└── created_at        timestamp with time zone NOT NULL DEFAULT NOW()
+```
+
 ### `tickets`
 
 Core ticket entity.
@@ -119,10 +138,15 @@ tickets
 ├── description       text NOT NULL
 ├── category          text NOT NULL             ← slug from ticket_categories (e.g. 'bug')
 ├── status            text NOT NULL DEFAULT 'open'   ← slug from ticket_statuses (e.g. 'open')
+├── priority          text NOT NULL DEFAULT 'normal' ← slug from ticket_priorities
 ├── customer_name     text NOT NULL
 ├── customer_email    text NOT NULL
 ├── customer_token    text NOT NULL UNIQUE (cuid2)   ← per-ticket secret for customer access
 ├── assigned_agent_id text → user.id (SET NULL on delete), nullable
+├── awaiting_reply    boolean NOT NULL DEFAULT false ← true when the latest public message is from the customer
+├── pending_replies   integer NOT NULL DEFAULT 0     ← customer messages since the last agent reply
+├── source            text NOT NULL DEFAULT 'portal' ← 'portal' | 'api'
+├── api_key_id        text → api_keys.id (SET NULL on delete), nullable   ← set when source = 'api'
 ├── closed_at         timestamp with time zone, nullable
 ├── created_at        timestamp with time zone NOT NULL DEFAULT NOW()
 └── updated_at        timestamp with time zone NOT NULL DEFAULT NOW()
@@ -133,6 +157,8 @@ Indexes:
 - status
 - assigned_agent_id
 - created_at
+- awaiting_reply
+- priority
 ```
 
 ### `ticket_comments`
@@ -191,7 +217,7 @@ ticket_activity
 ├── ticket_id         text NOT NULL → tickets.id (CASCADE DELETE)
 ├── actor_id          text → user.id (SET NULL on delete), nullable   ← null for customer actions
 ├── actor_name        text NOT NULL    ← stored at write time
-├── actor_role        text NOT NULL    ← 'customer' | 'agent' | 'admin' | 'system'
+├── actor_role        text NOT NULL    ← 'customer' | 'agent' | 'admin' | 'system' | 'api'
 ├── action            text NOT NULL
 │                     ← 'ticket_created' | 'status_changed' | 'assigned' | 'unassigned'
 │                        'comment_added' | 'internal_note_added' | 'ticket_closed'
@@ -226,6 +252,7 @@ db/schema/
 ├── auth.ts            ← user, session, account, verification (Better Auth managed)
 ├── tickets.ts         ← tickets, ticket_comments, ticket_attachments, ticket_activity
 ├── ticket-config.ts   ← ticket_statuses, ticket_categories
+├── api-keys.ts        ← api_keys
 ├── settings.ts        ← platform_settings
 ├── audit-logs.ts      ← audit_logs (scaffold)
 ├── email-outbox.ts    ← email_outbox, email_events (scaffold)

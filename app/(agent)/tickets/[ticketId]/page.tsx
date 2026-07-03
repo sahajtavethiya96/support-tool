@@ -112,8 +112,8 @@ export default async function AgentTicketDetailPage({ params }: Props) {
   return (
     <div className="p-4 lg:p-6">
       <TicketDetailRealtime ticketId={ticket.id} />
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 mb-5">
+      {/* Breadcrumb — stays pinned to the top of the scroll area */}
+      <div className="sticky top-0 z-10 -mx-4 lg:-mx-6 mb-5 flex items-center gap-2 bg-surface px-4 py-3 lg:px-6">
         <Link
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           href="/tickets"

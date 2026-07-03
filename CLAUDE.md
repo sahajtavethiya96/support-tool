@@ -206,6 +206,7 @@ Ticket **replies** (both customer and agent) use a shared **Tiptap** editor — 
 | Agent Portal | `docs/agent-portal.md` |
 | Admin Portal | `docs/admin-portal.md` |
 | Tickets | `docs/tickets.md` |
+| Public API | `docs/api.md` |
 | File Uploads | `docs/file-uploads.md` |
 | Email Notifications | `docs/email-notifications.md` |
 | Permission Model | `docs/permission-model.md` |

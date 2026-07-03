@@ -6,17 +6,19 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-color: #88bdf2 transparent;
   scrollbar-width: thin;
-  scrollbar-color: #88BDF2 transparent;
 }
 
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 ::-webkit-scrollbar-thumb {
-  background: #88BDF2;
+  background: #88bdf2;
   border-radius: 9999px;
 }
 
@@ -28,10 +30,10 @@ html {
 body {
   height: 100%;
   margin: 0;
-  letter-spacing: 0;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  letter-spacing: 0;
 }
 
 @theme inline {
@@ -44,9 +46,9 @@ body {
 
   /* ── Brand palette — runtime-overridable via ThemeProvider ── */
   --color-cream: var(--brand-cream);
-  --color-sand:  var(--brand-sand);
+  --color-sand: var(--brand-sand);
   --color-stone: var(--brand-stone);
-  --color-bark:  var(--brand-bark);
+  --color-bark: var(--brand-bark);
 
   /* Page */
   --color-page: var(--page);
@@ -98,10 +100,10 @@ body {
   --color-background: var(--background);
 
   /* ── Proportional radius (matches Teamority) ── */
-  --radius-sm:  calc(var(--radius) * 0.6);
-  --radius-md:  calc(var(--radius) * 0.8);
-  --radius-lg:  var(--radius);
-  --radius-xl:  calc(var(--radius) * 1.4);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
@@ -109,19 +111,20 @@ body {
 
 :root {
   /* ── Brand palette defaults (overridden by ThemeProvider) ── */
-  --brand-cream: #BDDDFC;
-  --brand-sand:  #88BDF2;
-  --brand-stone: #6A89A7;
-  --brand-bark:  #384959;
+  --brand-cream: #bdddfc;
+  --brand-sand: #88bdf2;
+  --brand-stone: #6a89a7;
+  --brand-bark: #384959;
 
   /* ── Page background ──────────────────────── */
-  --page: #BDDDFC;   /* cream / lightest blue */
+  --page: #bdddfc; /* cream / lightest blue */
 
   /* Content surface behind cards inside the app shell */
-  --surface: #F7F9FB;
+  --surface: #f7f9fb;
 
   /* Soft card/table elevation — visible lift paired with the 1px border */
-  --shadow-card: 0 4px 12px -4px rgba(56, 73, 89, 0.12),
+  --shadow-card:
+    0 4px 12px -4px rgba(56, 73, 89, 0.12),
     0 2px 4px -2px rgba(56, 73, 89, 0.07);
 
   /* ── Status colours ───────────────────────── */
@@ -133,71 +136,72 @@ body {
 
   /* ── Shadcn core — mapped to brand palette ── */
   --background: #ffffff;
-  --foreground: #384959;            /* bark  */
+  --foreground: #384959; /* bark  */
   --card: #ffffff;
-  --card-foreground: #384959;       /* bark  */
+  --card-foreground: #384959; /* bark  */
   --popover: #ffffff;
-  --popover-foreground: #384959;    /* bark  */
-  --primary: #384959;               /* bark  */
+  --popover-foreground: #384959; /* bark  */
+  --primary: #384959; /* bark  */
   --primary-foreground: #ffffff;
-  --secondary: #BDDDFC;             /* cream */
-  --secondary-foreground: #384959;  /* bark  */
-  --muted: #BDDDFC;                 /* cream */
-  --muted-foreground: #6A89A7;      /* stone */
-  --accent: #BDDDFC;                /* cream */
-  --accent-foreground: #384959;     /* bark  */
+  --secondary: #bdddfc; /* cream */
+  --secondary-foreground: #384959; /* bark  */
+  --muted: #bdddfc; /* cream */
+  --muted-foreground: #6a89a7; /* stone */
+  --accent: #bdddfc; /* cream */
+  --accent-foreground: #384959; /* bark  */
   --destructive: oklch(0.577 0.245 27.325);
-  --border: #88BDF2;                /* sand  */
-  --input: #88BDF2;                 /* sand  */
-  --ring: #384959;                  /* bark  */
+  --border: #88bdf2; /* sand  */
+  --input: #88bdf2; /* sand  */
+  --ring: #384959; /* bark  */
   --chart-1: #384959;
-  --chart-2: #6A89A7;
-  --chart-3: #88BDF2;
-  --chart-4: #BDDDFC;
+  --chart-2: #6a89a7;
+  --chart-3: #88bdf2;
+  --chart-4: #bdddfc;
   --chart-5: oklch(0.87 0 0);
   --radius: 0.5rem;
 
   /* ── Sidebar — bark (deep navy) ────────── */
-  --sidebar: #384959;               /* bark  */
-  --sidebar-foreground: #BDDDFC;    /* cream */
-  --sidebar-primary: #BDDDFC;       /* cream */
-  --sidebar-primary-foreground: #384959;  /* bark  */
+  --sidebar: #384959; /* bark  */
+  --sidebar-foreground: #bdddfc; /* cream */
+  --sidebar-primary: #bdddfc; /* cream */
+  --sidebar-primary-foreground: #384959; /* bark  */
   --sidebar-accent: rgba(189, 221, 252, 0.12);
-  --sidebar-accent-foreground: #BDDDFC;   /* cream */
+  --sidebar-accent-foreground: #bdddfc; /* cream */
   --sidebar-border: rgba(136, 189, 242, 0.2);
-  --sidebar-ring: #88BDF2;          /* sand  */
+  --sidebar-ring: #88bdf2; /* sand  */
 }
 
 .dark {
   /* ── 3-layer surface system ──────────────────
      sidebar (darkest) < surface/background < card (elevated).
      Blue-gray, not pure black — matches the brand's cool cast. */
-  --page:       #12151a;
-  --surface:    #161a20;   /* content area behind cards */
-  --shadow-card: 0 4px 14px -4px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+  --page: #12151a;
+  --surface: #161a20; /* content area behind cards */
+  --shadow-card:
+    0 4px 14px -4px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
   --background: #161a20;
-  --card:       #1e2229;   /* elevated cards, popovers */
-  --popover:    #1e2229;
-  --sidebar:    #0d0f12;   /* app frame / sidebar */
+  --card: #1e2229; /* elevated cards, popovers */
+  --popover: #1e2229;
+  --sidebar: #0d0f12; /* app frame / sidebar */
 
   /* ── Text ──────────────────────────────────── */
-  --foreground:         #f0f2f5;
-  --card-foreground:    #f0f2f5;
+  --foreground: #f0f2f5;
+  --card-foreground: #f0f2f5;
   --popover-foreground: #f0f2f5;
-  --muted-foreground:   #8b919e;
+  --muted-foreground: #8b919e;
 
   /* ── Brand accent — kept in dark (not grayscale) ── */
-  --primary:            #88bdf2;   /* sand */
+  --primary: #88bdf2; /* sand */
   --primary-foreground: #0d0f12;
-  --secondary:          #232830;
+  --secondary: #232830;
   --secondary-foreground: #f0f2f5;
-  --muted:              #1e2229;
-  --accent:             #222c3a;   /* subtle brand-tinted surface (was `bg-cream`) */
-  --accent-foreground:  #e8f1fb;
+  --muted: #1e2229;
+  --accent: #222c3a; /* subtle brand-tinted surface (was `bg-cream`) */
+  --accent-foreground: #e8f1fb;
   --destructive: oklch(0.704 0.191 22.216);
   --border: #272b33;
-  --input:  #2a2f38;
-  --ring:   #88bdf2;
+  --input: #2a2f38;
+  --ring: #88bdf2;
 
   /* ── Status ────────────────────────────────── */
   --success: oklch(0.65 0.13 145);
@@ -214,13 +218,13 @@ body {
   --chart-5: #fcd34d;
 
   /* ── Sidebar ───────────────────────────────── */
-  --sidebar-foreground:        #8b919e;
-  --sidebar-primary:           #88bdf2;
-  --sidebar-primary-foreground:#0d0f12;
-  --sidebar-accent:            rgba(255, 255, 255, 0.07);
+  --sidebar-foreground: #8b919e;
+  --sidebar-primary: #88bdf2;
+  --sidebar-primary-foreground: #0d0f12;
+  --sidebar-accent: rgba(255, 255, 255, 0.07);
   --sidebar-accent-foreground: #f0f2f5;
-  --sidebar-border:            rgba(255, 255, 255, 0.07);
-  --sidebar-ring:              #88bdf2;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --sidebar-ring: #88bdf2;
 }
 
 @layer base {
@@ -266,10 +270,10 @@ body {
   .tiptap-content h1,
   .tiptap-content h2,
   .tiptap-content h3 {
+    margin: 0.75rem 0 0.375rem;
     font-weight: 600;
     line-height: 1.3;
     color: var(--foreground);
-    margin: 0.75rem 0 0.375rem;
   }
   .tiptap-content h1 {
     font-size: 1.35rem;
@@ -295,8 +299,8 @@ body {
   }
   .tiptap-content ul,
   .tiptap-content ol {
-    margin: 0 0 0.5rem;
     padding-left: 1.25rem;
+    margin: 0 0 0.5rem;
   }
   .tiptap-content ul {
     list-style: disc;
@@ -311,38 +315,38 @@ body {
     margin: 0;
   }
   .tiptap-content code {
+    padding: 0.1rem 0.3rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
     background-color: var(--muted);
     border-radius: 0.25rem;
-    padding: 0.1rem 0.3rem;
-    font-size: 0.85em;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   .tiptap-content pre {
-    background-color: var(--secondary);
-    color: var(--foreground);
-    border-radius: 0.5rem;
     padding: 0.75rem 1rem;
-    overflow-x: auto;
     margin: 0 0 0.5rem;
+    overflow-x: auto;
+    color: var(--foreground);
+    background-color: var(--secondary);
+    border-radius: 0.5rem;
   }
   .tiptap-content pre code {
-    background: none;
-    color: inherit;
     padding: 0;
     font-size: 0.85em;
+    color: inherit;
+    background: none;
   }
   .tiptap-content blockquote {
-    border-left: 3px solid var(--border);
     padding-left: 0.75rem;
-    color: var(--muted-foreground);
     margin: 0 0 0.5rem;
+    color: var(--muted-foreground);
+    border-left: 3px solid var(--border);
   }
   /* Placeholder shown on the empty editor (from @tiptap/extension-placeholder). */
   .tiptap-content p.is-editor-empty:first-child::before {
-    content: attr(data-placeholder);
     float: left;
     height: 0;
-    pointer-events: none;
     color: var(--muted-foreground);
+    pointer-events: none;
+    content: attr(data-placeholder);
   }
 }

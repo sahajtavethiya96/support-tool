@@ -40,6 +40,7 @@ Support Tool uses three roles. Customers are not users in the system — they ar
 | Ban / unban user | No | No | Yes |
 | Delete user | No | No | Yes |
 | Access Orbit panel | No | No | Yes |
+| Manage API keys (`/admin/api-keys`) | No | No | Yes |
 
 ---
 
@@ -91,6 +92,23 @@ if (session.user.role !== 'admin') {
   return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 }
 ```
+
+### Public API Routes (`app/api/v1/*`)
+
+A fourth identity type, alongside the three above — an external caller
+authenticated with an API key instead of a session or a customer token.
+Managed by admins at `/admin/api-keys`; see `docs/api.md` for the API
+itself. `requireApiKey()` (`lib/api-auth.ts`) verifies a hashed, non-revoked
+key from the `Authorization: Bearer` header:
+
+```typescript
+const apiKey = await requireApiKey(request) // throws a 401 Response on failure
+```
+
+An active key can create tickets and read any ticket's status on this
+instance — there's no per-key scoping (single-tenant, self-hosted: every
+key belongs to the same instance owner). Revoking a key takes effect on
+its very next request, no redeploy required.
 
 ---
 

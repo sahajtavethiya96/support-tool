@@ -1,23 +1,12 @@
 import { createId } from "@paralleldrive/cuid2";
-import { and, eq, or } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { ADMIN_ROLE, AGENT_ROLE } from "@/config/platform";
-import { ticketActivity, ticketAttachments, tickets, user } from "@/db/schema";
-import { db } from "@/lib/db";
-import { enqueueEmail } from "@/lib/email";
-import { ticketCreatedTemplate } from "@/lib/email/templates/ticket-created";
-import { env } from "@/lib/env";
-import { createNotifications } from "@/lib/notifications";
-import { publishPushToUsers } from "@/lib/push";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { publishTicketCreated } from "@/lib/realtime";
 import { storage } from "@/lib/storage";
 import {
-  getDefaultPriority,
-  getDefaultStatus,
-  getTicketCategories,
-} from "@/lib/ticket-config";
+  createTicketFromSubmission,
+  validateTicketSubmission,
+} from "@/lib/tickets/create-ticket";
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
@@ -60,39 +49,22 @@ export async function POST(request: NextRequest) {
     .getAll("attachments")
     .filter((v): v is File => v instanceof File && v.size > 0);
 
-  // Validation
-  if (!name || name.length < 2 || name.length > 100) {
+  // Validate ticket fields *before* touching storage — files should never
+  // be uploaded for a submission that's going to be rejected anyway.
+  const validated = await validateTicketSubmission({
+    name,
+    email,
+    subject,
+    description,
+    category,
+  });
+  if (!validated.ok) {
     return NextResponse.json(
-      { error: "Name must be 2–100 characters." },
-      { status: 400 }
+      { error: validated.error },
+      { status: validated.httpStatus }
     );
   }
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json(
-      { error: "Invalid email address." },
-      { status: 400 }
-    );
-  }
-  if (!subject || subject.length < 5 || subject.length > 200) {
-    return NextResponse.json(
-      { error: "Subject must be 5–200 characters." },
-      { status: 400 }
-    );
-  }
-  if (!description || description.length < 10 || description.length > 5000) {
-    return NextResponse.json(
-      { error: "Description must be 10–5000 characters." },
-      { status: 400 }
-    );
-  }
-  const [validCategories, defaultStatus, defaultPriority] = await Promise.all([
-    getTicketCategories(),
-    getDefaultStatus(),
-    getDefaultPriority(),
-  ]);
-  if (!validCategories.some((c) => c.slug === category)) {
-    return NextResponse.json({ error: "Invalid category." }, { status: 400 });
-  }
+
   if (attachmentFiles.length > MAX_FILES) {
     return NextResponse.json(
       { error: `Maximum ${MAX_FILES} files allowed.` },
@@ -115,10 +87,9 @@ export async function POST(request: NextRequest) {
   }
 
   const ticketId = createId();
-  const customerToken = createId();
-  const now = new Date();
 
-  // Upload attachments first (so we can roll back cleanly if DB fails)
+  // Upload attachments first (createTicketFromSubmission rolls these back
+  // if the DB insert that follows fails).
   const uploadedAttachments: Array<{
     id: string;
     filename: string;
@@ -141,121 +112,26 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  try {
-    const [inserted] = await db
-      .insert(tickets)
-      .values({
-        id: ticketId,
-        subject,
-        description,
-        category,
-        status: defaultStatus?.slug ?? "open",
-        priority: defaultPriority?.slug ?? "normal",
-        customerName: name,
-        customerEmail: email,
-        customerToken,
-        // A brand-new ticket is awaiting the team's first reply.
-        awaitingReply: true,
-        pendingReplies: 1,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning({ ticketNumber: tickets.ticketNumber });
+  const result = await createTicketFromSubmission({
+    id: ticketId,
+    name,
+    email,
+    subject,
+    description,
+    category,
+    source: "portal",
+    attachments: uploadedAttachments,
+  });
 
-    // Insert attachments
-    if (uploadedAttachments.length > 0) {
-      await db.insert(ticketAttachments).values(
-        uploadedAttachments.map((a) => ({
-          id: a.id,
-          ticketId,
-          filename: a.filename,
-          storageKey: a.storageKey,
-          fileSize: a.fileSize,
-          mimeType: a.mimeType,
-          uploadedByName: name,
-          uploadedByRole: "customer",
-          createdAt: now,
-        }))
-      );
-    }
-
-    // Log activity
-    await db.insert(ticketActivity).values({
-      id: createId(),
-      ticketId,
-      actorName: name,
-      actorRole: "customer",
-      action: "ticket_created",
-      createdAt: now,
-    });
-
-    // Enqueue ticket.created email (non-blocking)
-    const ticketUrl = `${env.NEXT_PUBLIC_APP_URL}/ticket/${ticketId}?token=${customerToken}`;
-    const myTicketsUrl = `${env.NEXT_PUBLIC_APP_URL}/my-tickets`;
-    ticketCreatedTemplate({
-      customerName: name,
-      ticketNumber: inserted.ticketNumber,
-      ticketSubject: subject,
-      ticketUrl,
-      myTicketsUrl,
-    })
-      .then(({ html, text }) =>
-        enqueueEmail({
-          to: email,
-          subject: `[#${inserted.ticketNumber}] Your ticket has been received — ${subject}`,
-          html,
-          text,
-        })
-      )
-      .catch((err) => console.error("[ticket.created email]", err));
-
-    // Notify agents in-app + push — a brand-new ticket has no assigned
-    // agent yet, so every active agent/admin gets pinged.
-    const agents = await db
-      .select({ id: user.id })
-      .from(user)
-      .where(
-        and(
-          or(eq(user.role, AGENT_ROLE), eq(user.role, ADMIN_ROLE)),
-          eq(user.banned, false)
-        )
-      );
-    const recipientIds = agents.map((a) => a.id);
-    const notifTitle = `New ticket #${inserted.ticketNumber} from ${name}`;
-
-    await createNotifications(recipientIds, {
-      type: "ticket_created",
-      title: notifTitle,
-      body: subject,
-      ticketId,
-      ticketNumber: inserted.ticketNumber,
-    }).catch((err) => console.error("[notification.ticket_created]", err));
-
-    await publishPushToUsers(recipientIds, {
-      title: notifTitle,
-      body: subject,
-      deepLink: `${env.NEXT_PUBLIC_APP_URL}/tickets/${ticketId}`,
-    }).catch((err) => console.error("[push.ticket_created]", err));
-
-    // Live-refresh any agent currently viewing the ticket list (no-op unless
-    // Pusher Channels is configured).
-    await publishTicketCreated().catch((err) =>
-      console.error("[realtime.ticket_created]", err)
-    );
-
+  if (!result.ok) {
     return NextResponse.json(
-      { ticketNumber: inserted.ticketNumber },
-      { status: 201 }
-    );
-  } catch (err) {
-    // Clean up uploaded files on DB failure
-    for (const a of uploadedAttachments) {
-      await storage.delete(a.storageKey).catch(() => undefined);
-    }
-    console.error("[POST /api/tickets]", err);
-    return NextResponse.json(
-      { error: "Failed to create ticket." },
-      { status: 500 }
+      { error: result.error },
+      { status: result.httpStatus }
     );
   }
+
+  return NextResponse.json(
+    { ticketNumber: result.ticketNumber },
+    { status: 201 }
+  );
 }

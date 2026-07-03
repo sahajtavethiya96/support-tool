@@ -9,6 +9,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { apiKeys } from "@/db/schema/api-keys";
 import { user } from "@/db/schema/auth";
 
 export const tickets = pgTable(
@@ -33,6 +34,12 @@ export const tickets = pgTable(
     // — shown as a WhatsApp-style unread badge on the ticket list.
     awaitingReply: boolean("awaiting_reply").notNull().default(false),
     pendingReplies: integer("pending_replies").notNull().default(0),
+    // How the ticket entered the system — "portal" (customer form) or "api"
+    // (POST /api/v1/tickets). apiKeyId is set only for the latter.
+    source: text("source").notNull().default("portal"),
+    apiKeyId: text("api_key_id").references(() => apiKeys.id, {
+      onDelete: "set null",
+    }),
     closedAt: timestamp("closed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

@@ -16,6 +16,7 @@ Built with Next.js, PostgreSQL, Drizzle ORM, and Better Auth.
 - **Dashboard** — Ticket stats for agents and admins (open, in-progress, closed, average wait time).
 - **Activity History** — Full audit trail per ticket (status changes, assignments, replies).
 - **Role-Based Access** — Customer, Agent, and Admin roles with strict permission enforcement.
+- **Public API** — Create tickets from your own website via API-key-authenticated REST endpoints. See [docs/api.md](docs/api.md).
 
 ---
 

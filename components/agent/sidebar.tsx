@@ -3,6 +3,7 @@
 import {
   ChatTextIcon,
   ClockCounterClockwiseIcon,
+  KeyIcon,
   PaintBrushIcon,
   ShieldCheckIcon,
   SquaresFourIcon,
@@ -36,6 +37,7 @@ const adminItems = [
     label: "Audit Log",
     icon: ClockCounterClockwiseIcon,
   },
+  { href: "/admin/api-keys", label: "API Keys", icon: KeyIcon },
 ];
 
 export function AgentSidebar({
