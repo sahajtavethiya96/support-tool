@@ -137,17 +137,17 @@ Admins can change the platform color theme and appearance mode (light/dark/auto)
 - Custom components are only acceptable for app-specific composite UI that has no shadcn equivalent.
 - **Icons:** use `@phosphor-icons/react` — not Lucide, not Heroicons.
 
-### Rich Text (Replies)
+### Rich Text (Descriptions & Replies)
 
-Ticket **replies** (both customer and agent) use a shared **Tiptap** editor — not a plain `Textarea`.
+Ticket **descriptions** (submit form) and **replies** (both customer and agent) use a shared **Tiptap** editor — not a plain `Textarea`.
 
 - **Compose:** `components/common/rich-text-editor.tsx` — editable editor + brand-themed toolbar (bold, italic, underline, strike, inline code, bullet/numbered lists, code block, quote). Pass `tone="warning"` for agent internal notes. Pasted URLs auto-link.
-- **Display:** `components/common/rich-text-content.tsx` — renders content **read-only through Tiptap** (`editable: false`). Never render reply content as raw HTML — this keeps it XSS-safe by construction, so no sanitizer is needed.
+- **Display:** `components/common/rich-text-content.tsx` — renders content **read-only through Tiptap** (`editable: false`). Never render description/reply content as raw HTML — this keeps it XSS-safe by construction, so no sanitizer is needed.
 - **Shared config:** `components/common/rich-text-extensions.ts` — one extension set for both, so compose and display always match.
-- **Storage:** reply `content` is stored as **Tiptap JSON** (`ticketComments.content`). Legacy rows may be plain text — every reader tolerates both.
+- **Storage:** `tickets.description` and reply `content` (`ticketComments.content`) are both stored as **Tiptap JSON**. Legacy rows may be plain text — every reader tolerates both.
 - **Previews/emails/notifications/push:** never send raw JSON to a text context. Flatten with `richTextToPlainText()` from `lib/rich-text.ts`; validate emptiness with `isRichTextEmpty()`.
 - **Styling:** rendered rich text uses the scoped `.tiptap-content` styles in `app/globals.css` (brand-aligned) — there is no `@tailwindcss/typography` plugin.
-- The original ticket **description** (submit form) remains plain text — only replies are rich.
+- **Public API:** `POST /api/v1/tickets` accepts `description` as plain text (default) or HTML (`descriptionFormat: "html"`), converted server-side to Tiptap JSON via `textToRichTextJson()`/`htmlToRichTextJson()` in `lib/rich-text.ts` — external callers never need to speak Tiptap's JSON shape directly.
 
 ### IDs
 

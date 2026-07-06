@@ -395,7 +395,7 @@ export function TicketInfoSidebar({
         icon={<ClockIcon className="size-3.5" />}
         title="Activity"
       >
-        <div className="space-y-3">
+        <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
           {activity.map((a) => {
             const label = ACTION_LABELS[a.action]?.(a) ?? a.action;
             return (

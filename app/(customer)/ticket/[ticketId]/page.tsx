@@ -273,9 +273,7 @@ export default async function TicketDetailPage({
                   {getInitials(ticket.customerName)}
                 </div>
               </div>
-              <p className="text-sm text-bark whitespace-pre-wrap leading-relaxed wrap-break-word">
-                {ticket.description}
-              </p>
+              <RichTextContent content={ticket.description} />
 
               {ticketLevelAttachments.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-sand">

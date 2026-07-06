@@ -185,9 +185,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
                   {formatTicketDateTime(ticket.createdAt)}
                 </span>
               </div>
-              <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed wrap-break-word">
-                {ticket.description}
-              </p>
+              <RichTextContent content={ticket.description} />
               {ticketLevelAttachments.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-border">
                   <DeletableTicketAttachments

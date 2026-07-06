@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { ticketComments, tickets } from "@/db/schema";
 import { requireApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { richTextToPlainText } from "@/lib/rich-text";
+import { richTextToHtml, richTextToPlainText } from "@/lib/rich-text";
 
 // GET /api/v1/tickets/:id/comments — public API, authenticated with an API
 // key. Read-only conversation thread: public replies only, internal notes
@@ -50,6 +50,7 @@ export async function GET(
       authorName: c.authorName,
       authorRole: c.authorRole,
       content: richTextToPlainText(c.content),
+      html: richTextToHtml(c.content),
       createdAt: c.createdAt,
     })),
   });

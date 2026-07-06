@@ -78,9 +78,21 @@ Create a ticket.
 | `name` | Yes | Customer's name, 2–100 characters |
 | `email` | Yes | Customer's email |
 | `subject` | Yes | 5–200 characters |
-| `description` | Yes | 10–5000 characters |
+| `description` | Yes | 10–5000 characters (counted after formatting is stripped), see note below |
+| `descriptionFormat` | No | `"text"` (default) or `"html"` |
 | `category` | Yes | Must match a category slug configured in `/admin/ticket-config` |
 | `priority` | No | Must match a priority slug if given; falls back to the platform's default priority |
+
+> **Editor-agnostic by design.** Ticket descriptions are rich text
+> internally (same as replies), but you don't need to speak our internal
+> format to submit one. Send plain text (the default), or set
+> `descriptionFormat: "html"` and send whatever your own editor exports —
+> Quill, TipTap, TinyMCE, CKEditor, Lexical, Slate, all of them can export
+> HTML. We convert it server-side, safely: your HTML is parsed strictly
+> through Support Tool's own schema, so any tag or attribute it doesn't
+> recognize (scripts, event handlers, unknown elements) is simply dropped,
+> never stored or trusted as-is. If your form is a plain textarea, just
+> send plain text — no conversion needed either way.
 
 ```bash
 curl -X POST https://support.example.com/api/v1/tickets \
@@ -96,6 +108,7 @@ curl -X POST https://support.example.com/api/v1/tickets \
 ```
 
 ```js
+// Plain text (default) — descriptionFormat omitted
 await fetch("https://support.example.com/api/v1/tickets", {
   method: "POST",
   headers: {
@@ -107,6 +120,23 @@ await fetch("https://support.example.com/api/v1/tickets", {
     email: "jane@example.com",
     subject: "Cannot log in",
     description: "I get an error when I try to sign in.",
+    category: "bug",
+  }),
+});
+
+// HTML from your own editor
+await fetch("https://support.example.com/api/v1/tickets", {
+  method: "POST",
+  headers: {
+    Authorization: "Bearer stk_live_xxxxxxxxxxxxxxxxxxxxxxxx",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    name: "Jane Doe",
+    email: "jane@example.com",
+    subject: "Cannot log in",
+    description: "<p>I get an error when I try to sign in.</p><p><strong>It started this morning.</strong></p>",
+    descriptionFormat: "html",
     category: "bug",
   }),
 });
@@ -176,6 +206,7 @@ curl https://support.example.com/api/v1/tickets/cku1a2b3c4d5e6f/comments \
       "authorName": "Alex (Support)",
       "authorRole": "agent",
       "content": "Thanks for reaching out — looking into this now.",
+      "html": "<p>Thanks for reaching out — looking into this now.</p>",
       "createdAt": "2026-07-01T11:30:00.000Z"
     }
   ]
@@ -183,10 +214,13 @@ curl https://support.example.com/api/v1/tickets/cku1a2b3c4d5e6f/comments \
 ```
 
 Only public replies — internal agent notes are never returned, same rule
-the customer portal itself enforces. `content` is always plain text
-(replies are stored as rich text internally; this flattens formatting away
-rather than exposing Support Tool's internal document format). `404` if
-the ticket doesn't exist.
+the customer portal itself enforces. Replies are stored as rich text
+internally (bold, lists, links, etc.) — `content` is that flattened to
+plain text; `html` renders the same content with formatting intact, safe
+to insert into a page (it's generated from our own stored document, not
+arbitrary external HTML — only tags the editor itself can produce ever
+come out). Use whichever fits where you're displaying it. `404` if the
+ticket doesn't exist.
 
 ## `GET /api/v1/tickets?email=`
 
@@ -226,7 +260,12 @@ the app) — an empty `tickets` array just means no match, not an error.
 - **File attachments** — create the ticket via the API, then have the
   customer attach files from the portal link if needed.
 - **Posting additional replies** through the API (continuing a
-  conversation from your own widget).
+  conversation from your own widget). When this ships, expect the same
+  `descriptionFormat`-style `text`/`html` input as ticket creation. In the
+  meantime, `GET .../comments`' `html` field is read-only enrichment of
+  *our own* replies, not something you can send back to us — if a customer
+  needs to keep replying with formatting, send them the ticket's
+  `portalUrl` so they use Support Tool's own editor.
 - **Webhooks** — there's no way yet to get notified when an agent replies
   or a ticket's status changes. Poll `GET /api/v1/tickets/:id/comments` if
   you need that today.

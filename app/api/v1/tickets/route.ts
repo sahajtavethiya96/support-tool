@@ -6,6 +6,7 @@ import { requireApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { htmlToRichTextJson, textToRichTextJson } from "@/lib/rich-text";
 import { createTicketFromSubmission } from "@/lib/tickets/create-ticket";
 
 const LIST_LIMIT = 50;
@@ -75,6 +76,7 @@ export async function POST(request: NextRequest) {
     email?: string;
     subject?: string;
     description?: string;
+    descriptionFormat?: string;
     category?: string;
     priority?: string;
   };
@@ -84,11 +86,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
+  // "text" (default) or "html" — either way, converted to the same Tiptap
+  // JSON document the app's own editor produces, before validation ever
+  // sees it. HTML is parsed strictly through our schema (htmlToRichTextJson),
+  // so unrecognized tags/attributes are dropped, never stored as-is.
+  const rawDescription = String(body.description ?? "");
+  const description =
+    body.descriptionFormat === "html"
+      ? htmlToRichTextJson(rawDescription)
+      : textToRichTextJson(rawDescription);
+
   const result = await createTicketFromSubmission({
     name: String(body.name ?? ""),
     email: String(body.email ?? ""),
     subject: String(body.subject ?? ""),
-    description: String(body.description ?? ""),
+    description,
     category: String(body.category ?? ""),
     priority: body.priority ? String(body.priority) : undefined,
     source: "api",

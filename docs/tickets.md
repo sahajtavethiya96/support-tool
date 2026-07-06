@@ -13,7 +13,7 @@ A ticket is the core entity of the support tool. It represents a support request
 | `id` | cuid2 | Internal unique ID |
 | `ticketNumber` | serial integer | Human-readable ID (#1001, #1002…) |
 | `subject` | text | Short summary of the issue |
-| `description` | text | Full description from the customer |
+| `description` | text | Tiptap JSON (rich text), same as reply `content`. Legacy rows may be plain text — readers tolerate both. Flatten with `richTextToPlainText()` for previews/emails |
 | `category` | text (slug) | References `ticket_categories.slug` — admin-configurable |
 | `status` | text (slug) | References `ticket_statuses.slug` — admin-configurable |
 | `customerName` | text | Name provided by the customer |

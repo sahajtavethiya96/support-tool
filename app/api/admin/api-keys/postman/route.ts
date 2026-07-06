@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
         },
       },
       {
-        name: "Create Ticket",
+        name: "Create Ticket (plain text)",
         request: {
           method: "POST",
           header: [{ key: "Content-Type", value: "application/json" }],
@@ -91,6 +91,34 @@ export async function GET(request: NextRequest) {
             },
           },
         ],
+      },
+      {
+        name: "Create Ticket (HTML from your own editor)",
+        request: {
+          method: "POST",
+          header: [{ key: "Content-Type", value: "application/json" }],
+          body: {
+            mode: "raw",
+            raw: JSON.stringify(
+              {
+                name: "Jane Doe",
+                email: "jane@example.com",
+                subject: "Cannot log in",
+                description:
+                  "<p>I get an error when I try to sign in.</p><p><strong>It started this morning.</strong></p>",
+                descriptionFormat: "html",
+                category: "bug",
+              },
+              null,
+              2
+            ),
+          },
+          url: {
+            raw: "{{base_url}}/api/v1/tickets",
+            host: ["{{base_url}}"],
+            path: ["api", "v1", "tickets"],
+          },
+        },
       },
       {
         name: "Get Ticket Status",

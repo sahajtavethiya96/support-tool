@@ -12,12 +12,13 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { RichTextEditor } from "@/components/common/rich-text-editor";
 import { SearchableSelect } from "@/components/common/searchable-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { PRODUCT_NAME } from "@/config/platform";
+import { richTextToPlainText } from "@/lib/rich-text";
 import { cn } from "@/lib/utils";
 
 const CATEGORIES = [
@@ -101,10 +102,11 @@ export default function SubmitPage() {
     ) {
       e.subject = "Subject must be 5–200 characters.";
     }
+    const descriptionText = richTextToPlainText(description).trim();
     if (
-      !description.trim() ||
-      description.trim().length < 10 ||
-      description.trim().length > 5000
+      !descriptionText ||
+      descriptionText.length < 10 ||
+      descriptionText.length > 5000
     ) {
       e.description = "Description must be 10–5000 characters.";
     }
@@ -182,7 +184,9 @@ export default function SubmitPage() {
         // preventScroll: the browser's native focus-scroll is instant and
         // would otherwise fight/override the smooth scroll above.
         container
-          ?.querySelector<HTMLElement>("input, textarea, button")
+          ?.querySelector<HTMLElement>(
+            'input, textarea, [contenteditable="true"], button'
+          )
           ?.focus({ preventScroll: true });
       });
       return;
@@ -195,7 +199,7 @@ export default function SubmitPage() {
       body.append("name", name.trim());
       body.append("email", email.trim());
       body.append("subject", subject.trim());
-      body.append("description", description.trim());
+      body.append("description", description);
       body.append("category", category);
       files.forEach((f) => body.append("attachments", f));
 
@@ -376,23 +380,16 @@ export default function SubmitPage() {
 
             {/* Description */}
             <div className="space-y-1.5" ref={descriptionFieldRef}>
-              <Label
-                className="text-bark text-sm font-medium"
-                htmlFor="description"
-              >
+              <Label className="text-bark text-sm font-medium">
                 Description <span className="text-red-600">*</span>
               </Label>
-              <Textarea
-                className="resize-none"
+              <RichTextEditor
                 disabled={submitting}
-                id="description"
-                maxLength={5000}
-                onChange={(e) => {
-                  setDescription(e.target.value);
+                onChange={(json) => {
+                  setDescription(json);
                   clearError("description");
                 }}
                 placeholder="Please describe your issue in detail…"
-                rows={5}
                 value={description}
               />
               <div className="flex justify-between">
@@ -402,7 +399,7 @@ export default function SubmitPage() {
                   <span />
                 )}
                 <span className="text-xs text-stone">
-                  {description.length}/5000
+                  {richTextToPlainText(description).length}/5000
                 </span>
               </div>
             </div>

@@ -41,7 +41,8 @@ const CURL_CREATE = `curl -X POST https://support.example.com/api/v1/tickets \\
     "category": "bug"
   }'`;
 
-const JS_CREATE = `await fetch("https://support.example.com/api/v1/tickets", {
+const JS_CREATE = `// Plain text (default) — descriptionFormat omitted
+await fetch("https://support.example.com/api/v1/tickets", {
   method: "POST",
   headers: {
     Authorization: "Bearer stk_live_xxxxxxxxxxxxxxxxxxxxxxxx",
@@ -52,6 +53,23 @@ const JS_CREATE = `await fetch("https://support.example.com/api/v1/tickets", {
     email: "jane@example.com",
     subject: "Cannot log in",
     description: "I get an error when I try to sign in.",
+    category: "bug",
+  }),
+});
+
+// HTML from your own editor
+await fetch("https://support.example.com/api/v1/tickets", {
+  method: "POST",
+  headers: {
+    Authorization: "Bearer stk_live_xxxxxxxxxxxxxxxxxxxxxxxx",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    name: "Jane Doe",
+    email: "jane@example.com",
+    subject: "Cannot log in",
+    description: "<p>I get an error when I try to sign in.</p><p><strong>It started this morning.</strong></p>",
+    descriptionFormat: "html",
     category: "bug",
   }),
 });`;
@@ -87,6 +105,7 @@ const RESPONSE_COMMENTS = `{
       "authorName": "Alex (Support)",
       "authorRole": "agent",
       "content": "Thanks for reaching out — looking into this now.",
+      "html": "<p>Thanks for reaching out — looking into this now.</p>",
       "createdAt": "2026-07-01T11:30:00.000Z"
     }
   ]
@@ -112,7 +131,17 @@ const PARAMS = [
   { field: "name", required: true, notes: "Customer's name, 2–100 characters" },
   { field: "email", required: true, notes: "Customer's email" },
   { field: "subject", required: true, notes: "5–200 characters" },
-  { field: "description", required: true, notes: "10–5000 characters" },
+  {
+    field: "description",
+    required: true,
+    notes:
+      "10–5000 characters (counted after formatting is stripped), see note below",
+  },
+  {
+    field: "descriptionFormat",
+    required: false,
+    notes: '"text" (default) or "html"',
+  },
   {
     field: "category",
     required: true,
@@ -128,7 +157,7 @@ const PARAMS = [
 
 const UNSUPPORTED = [
   "File attachments — create the ticket via the API, then have the customer attach files from the portal link if needed.",
-  "Posting additional replies through the API (continuing a conversation from your own widget).",
+  "Posting additional replies through the API (continuing a conversation from your own widget). When this ships, expect the same descriptionFormat-style text/html input as ticket creation. In the meantime, the html field on GET .../comments is read-only enrichment of our own replies, not something you can send back; send the customer the ticket's portalUrl if they need to keep replying with formatting.",
   "Webhooks — no way yet to get notified when an agent replies or a status changes. Poll GET /api/v1/tickets/:id/comments if you need that today.",
   "A client-side/embeddable widget — the API is designed to be called from your backend, not a browser.",
 ];
@@ -301,6 +330,23 @@ export default async function ApiDocsPage() {
           </table>
         </div>
 
+        <div className="flex gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <WarningCircleIcon className="size-5 shrink-0 text-blue-600" />
+          <p className="text-sm text-blue-800">
+            <strong>Editor-agnostic by design.</strong> Ticket descriptions are
+            rich text internally (same as replies), but you don't need to speak
+            our internal format to submit one. Send plain text (the default), or
+            set <code className="text-xs">descriptionFormat: "html"</code> and
+            send whatever your own editor exports — Quill, TipTap, TinyMCE,
+            CKEditor, Lexical, Slate, all of them can export HTML. We convert it
+            server-side, safely: your HTML is parsed strictly through Support
+            Tool's own schema, so any tag or attribute it doesn't recognize
+            (scripts, event handlers, unknown elements) is simply dropped, never
+            stored or trusted as-is. If your form is a plain textarea, just send
+            plain text — no conversion needed either way.
+          </p>
+        </div>
+
         <CodeBlock code={CURL_CREATE} label="cURL" />
         <CodeBlock code={JS_CREATE} label="JavaScript" />
 
@@ -376,10 +422,13 @@ export default async function ApiDocsPage() {
 
         <p className="text-sm text-muted-foreground">
           Only public replies — internal agent notes are never returned, same
-          rule the customer portal itself enforces.{" "}
-          <code className="text-xs">content</code> is always plain text (replies
-          are stored as rich text internally; this flattens formatting away
-          rather than exposing Support Tool's internal document format).{" "}
+          rule the customer portal itself enforces. Replies are stored as rich
+          text internally (bold, lists, links, etc.) —{" "}
+          <code className="text-xs">content</code> is that flattened to plain
+          text; <code className="text-xs">html</code> renders the same content
+          with formatting intact, safe to insert into a page (it's generated
+          from our own stored document, not arbitrary external HTML). Use
+          whichever fits where you're displaying it.{" "}
           <code className="text-xs bg-muted rounded px-1 py-0.5">404</code> if
           the ticket doesn't exist.
         </p>

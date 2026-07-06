@@ -9,6 +9,7 @@ import { env } from "@/lib/env";
 import { createNotifications } from "@/lib/notifications";
 import { publishPushToUsers } from "@/lib/push";
 import { publishTicketCreated } from "@/lib/realtime";
+import { richTextToPlainText } from "@/lib/rich-text";
 import { storage } from "@/lib/storage";
 import {
   getDefaultPriority,
@@ -75,6 +76,12 @@ type ValidationResult =
  * a caller that does its own I/O before creation (the portal route uploads
  * attachments to storage first) can validate *before* that I/O, instead of
  * discovering "invalid category" only after files are already uploaded.
+ *
+ * `description` is expected to already be a Tiptap JSON string by the time
+ * it reaches here (the portal's editor produces it client-side; the public
+ * API converts its text/html input to it at the route level, see
+ * app/api/v1/tickets/route.ts) — length is validated against the flattened
+ * plain text, not the raw JSON string's length.
  */
 export async function validateTicketSubmission(input: {
   name: string;
@@ -87,7 +94,8 @@ export async function validateTicketSubmission(input: {
   const name = input.name.trim();
   const email = input.email.trim();
   const subject = input.subject.trim();
-  const description = input.description.trim();
+  const description = input.description;
+  const descriptionText = richTextToPlainText(description).trim();
   const category = input.category.trim();
 
   if (!name || name.length < 2 || name.length > 100) {
@@ -107,7 +115,11 @@ export async function validateTicketSubmission(input: {
       httpStatus: 400,
     };
   }
-  if (!description || description.length < 10 || description.length > 5000) {
+  if (
+    !descriptionText ||
+    descriptionText.length < 10 ||
+    descriptionText.length > 5000
+  ) {
     return {
       ok: false,
       error: "Description must be 10–5000 characters.",
