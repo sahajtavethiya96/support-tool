@@ -1,0 +1,47 @@
+# For your own hosted Postgres (Neon, Supabase, RDS, etc.) instead of the bundled
+# one in docker-compose.yml — no postgres service here at all, so nothing bundled
+# starts. Use this file INSTEAD OF docker-compose.yml (not alongside it):
+#
+#   1. cp .env.docker.example .env
+#   2. Replace DATABASE_URL in .env with your own connection string
+#   3. docker compose -f docker-compose.external-db.yml up -d
+#
+# The one-shot `migrate` service runs DB migrations + seeds before app/worker start,
+# against whatever DATABASE_URL you set above.
+
+services:
+  migrate:
+    build: .
+    image: support-tool:latest
+    command: pnpm setup
+    env_file: .env
+    restart: "no"
+
+  app:
+    build: .
+    image: support-tool:latest
+    command: pnpm start
+    env_file: .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker:
+    build: .
+    image: support-tool:latest
+    command: pnpm worker:start
+    env_file: .env
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  uploads:

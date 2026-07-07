@@ -12,9 +12,12 @@ export async function getPlatformSettings() {
     row ?? {
       theme: "default",
       appearanceMode: "auto" as const,
+      // Fresh install: only password is on until an admin explicitly enables
+      // magic link/Google from /admin/appearance — matches pnpm create:admin
+      // being the zero-dependency bootstrap path (no SMTP/OAuth required).
       passwordLoginEnabled: true,
-      magicLinkEnabled: true,
-      googleLoginEnabled: true,
+      magicLinkEnabled: false,
+      googleLoginEnabled: false,
     }
   );
 }

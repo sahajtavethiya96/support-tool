@@ -1,6 +1,7 @@
 "use client";
 
 import { GoogleLogoIcon } from "@phosphor-icons/react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ function AuthFormInner({
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const callbackURL = searchParams.get("next") ?? "/post-auth";
+  const passwordJustReset = searchParams.get("passwordReset") === "1";
 
   async function handleGoogleSignIn() {
     setError(null);
@@ -150,6 +152,12 @@ function AuthFormInner({
                 </p>
               </div>
 
+              {passwordJustReset && (
+                <p className="text-sm text-bark bg-cream rounded-md px-3 py-2">
+                  Password updated. Sign in with your new password.
+                </p>
+              )}
+
               {/* Google button — only when configured and enabled */}
               {googleEnabled && (
                 <>
@@ -205,12 +213,20 @@ function AuthFormInner({
                     />
                   </div>
                   <div>
-                    <label
-                      className="block text-sm font-medium text-bark mb-1.5"
-                      htmlFor="password"
-                    >
-                      Password
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label
+                        className="block text-sm font-medium text-bark"
+                        htmlFor="password"
+                      >
+                        Password
+                      </label>
+                      <Link
+                        className="text-xs text-stone underline underline-offset-4 hover:text-bark transition-colors"
+                        href="/forgot-password"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
                     <Input
                       autoComplete="current-password"
                       className="text-foreground"

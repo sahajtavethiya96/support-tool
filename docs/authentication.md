@@ -67,11 +67,11 @@ Agents and admins authenticate via Better Auth with three supported methods:
 | Magic Link | Agent enters email → receives a one-time sign-in link → clicks it → session created. Requires SMTP to be configured (`lib/email`). |
 | Google OAuth | Agent clicks "Sign in with Google" → OAuth flow → session created. Requires `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` to be set. |
 
-There is **no public self-registration** for any method — a user account only ever comes into existence via `pnpm create:admin` (script), an admin promoting an existing magic-link/Google sign-up (`pnpm make:admin` or the admin panel), or a future admin-panel "invite" action. Password accounts are never created by an open sign-up form.
+There is **no public self-registration** for any method — a user account only ever comes into existence via `pnpm create:admin` (script), an admin promoting an existing magic-link/Google sign-up (`pnpm make:admin` or the admin panel), or an admin inviting them from `/admin/users` (see "Inviting a New Agent/Admin" below). Password accounts are never created by an open sign-up form.
 
 ### Sign-In Method Toggles
 
-An admin can enable/disable each method at runtime from **`/admin/appearance`** (stored in `platform_settings`: `passwordLoginEnabled`, `magicLinkEnabled`, `googleLoginEnabled` — all default `true`). This is enforced **server-side**, not just hidden in the UI: `lib/auth.ts` registers a `hooks.before` middleware that rejects `/sign-in/email`, `/sign-in/magic-link`, and `/sign-in/social` requests when the corresponding toggle is off, so a disabled method can't be used by calling the API directly. The settings UI (and the API route backing it) refuses to let all three be disabled at once — at least one method must always remain reachable.
+An admin can enable/disable each method at runtime from **`/admin/appearance`** (stored in `platform_settings`: `passwordLoginEnabled`, `magicLinkEnabled`, `googleLoginEnabled`). Fresh install default: only `passwordLoginEnabled` is `true` — matches `pnpm create:admin` being the zero-dependency bootstrap path (no SMTP/OAuth required to get in the door). An admin opts into magic link and/or Google afterward once SMTP/OAuth credentials are actually configured. This is enforced **server-side**, not just hidden in the UI: `lib/auth.ts` registers a `hooks.before` middleware that rejects `/sign-in/email`, `/sign-in/magic-link`, and `/sign-in/social` requests when the corresponding toggle is off, so a disabled method can't be used by calling the API directly. The settings UI (and the API route backing it) refuses to let all three be disabled at once — at least one method must always remain reachable.
 
 Google's toggle only controls whether the *configured* provider is offered — turning it on without `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` set does nothing (the switch is disabled in the UI in that case).
 
@@ -90,7 +90,19 @@ Google's toggle only controls whether the *configured* provider is offered — t
 - Minimum **8 characters** (`emailAndPassword.minPasswordLength` in `lib/auth.ts`).
 - Hashed and stored by Better Auth in the `account` table (`provider_id = 'credential'`) — the app never handles raw password hashing itself.
 - `requireEmailVerification` is off — self-hosted installs may not have SMTP configured, so password sign-in must not depend on receiving an email.
-- No self-service password reset flow yet — an admin resets a locked-out user by re-running `pnpm create:admin` for a new account or via a future admin-panel action. (Not yet built — see Out of Scope.)
+- **Self-service reset:** `/forgot-password` → email + Better Auth's `sendResetPassword` (`lib/auth.ts`) sends a link via `resetPasswordTemplate` → `/reset-password?token=...` sets a new password. Same generic-success-message anti-enumeration pattern as magic link. Reset link expires in **1 hour**, single-use (Better Auth's `verification` table). Blocked entirely (`403`) if `passwordLoginEnabled` is off — there's nothing to reset into.
+- No admin-initiated reset yet (an admin setting a new password for a locked-out user directly) — for now, re-invite or re-run `pnpm create:admin` for a new account.
+
+### Inviting a New Agent/Admin
+
+An admin can invite a new agent/admin from **`/admin/users`** ("Invite User") instead of requiring `pnpm create:admin` for every account — `POST /api/users` (admin only).
+
+1. Admin enters name, email, and role (agent/admin) and submits.
+2. A `user` row is created immediately (`emailVerified: true`, no password yet).
+3. An invitation email is sent (`userInvitedTemplate`):
+   - If **password login is enabled**, the primary button sets up a password — it links to `/reset-password?token=...` using a token minted the same way Better Auth's own reset-password flow does (`lib/password-setup-token.ts`), just with a longer **7-day** expiry (an invite doubles as an account-activation link, not a live "I forgot my password" request). Submitting that form creates their `credential` account (Better Auth's `/reset-password` endpoint creates one if none exists yet).
+   - If password login is **disabled** (magic-link/Google-only instance), the email links straight to `/login` instead — the user row alone is enough for those methods to find them, no password step needed.
+4. The invitee's session starts the same way as any other sign-in once they've set a password (or used magic link/Google) — no separate "invite acceptance" session type.
 
 ### Magic Link Rules
 
@@ -104,6 +116,7 @@ Google's toggle only controls whether the *configured* provider is offered — t
 - Database-backed sessions (stored in `session` table).
 - Default TTL: **7 days** with sliding expiry — TTL resets on each authenticated request.
 - A banned user's sessions are revoked immediately by the Better Auth Admin Plugin.
+- 60-second cookie cache (`session.cookieCache` in `lib/auth.ts`) to skip a DB round-trip on most requests — trusts a signed cookie blob for up to 60s without re-checking the DB. Sign-out (`app/actions/auth.ts`) calls `auth.api.signOut()` directly from a Server Action rather than through the HTTP route, which needs Better Auth's `nextCookies()` plugin (last in the `plugins` array in `lib/auth.ts`) to actually forward the resulting cookie-clearing headers to the browser — without it, the DB session is deleted correctly but the browser keeps a still-valid cache cookie for up to 60s, so the user appears to stay signed in until it expires on its own.
 
 ---
 
@@ -243,15 +256,17 @@ platform_settings (db/schema/settings.ts — not a Better Auth table)
 | CSRF | Better Auth handles CSRF on all POST routes |
 | Token reuse | Magic links are single-use |
 | Banned users | Sessions revoked immediately on ban |
-| Disabled sign-in methods bypassed via direct API call | `lib/auth.ts`'s `hooks.before` middleware rejects `/sign-in/email`, `/sign-in/magic-link`, `/sign-in/social` server-side when the matching `platform_settings` toggle is off — not just a hidden UI button |
+| Disabled sign-in methods bypassed via direct API call | `lib/auth.ts`'s `hooks.before` middleware rejects `/sign-in/email`, `/sign-in/magic-link`, `/sign-in/social`, `/request-password-reset`, `/reset-password` server-side when the matching `platform_settings` toggle is off — not just a hidden UI button |
 | Password brute-forcing | Better Auth's built-in rate limiting (on by default in production); 8-character minimum |
 | Locking out all sign-in | The settings API and UI both refuse to disable the last remaining enabled method |
+| Reset link abuse | Rate limited like magic link; single-use; 1-hour expiry; same generic response whether or not the email exists |
+| Invite password-setup link guessing | Token minted the same unguessable way as customer ticket tokens (`createId()`, cuid2) — see `lib/password-setup-token.ts` |
 
 ---
 
 ## Out of Scope (MVP)
 
-- Self-service password reset (admin-driven reset/re-creation only, for now)
+- Admin-initiated password reset (an admin directly setting a new password for a locked-out user) — self-service reset and invite-driven password setup are both built; see § 2
 - Public self-registration for any method (accounts are always script- or admin-created)
 - Customer accounts with passwords
 - 2FA / TOTP

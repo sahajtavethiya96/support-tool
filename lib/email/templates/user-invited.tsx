@@ -3,9 +3,18 @@ export async function userInvitedTemplate(props: {
   role: string;
   signInUrl: string;
   appName: string;
+  /** When set (password login is enabled), the primary CTA sets up a
+   * password instead of linking straight to /login — a fresh invite has no
+   * credential account yet, so a bare sign-in link would leave the invitee
+   * with no way in unless another method (magic link/Google) is enabled. */
+  passwordSetupUrl?: string;
 }) {
-  const { inviteeName, role, signInUrl, appName } = props;
+  const { inviteeName, role, signInUrl, appName, passwordSetupUrl } = props;
   const roleLabel = role === "admin" ? "Admin" : "Agent";
+  const ctaUrl = passwordSetupUrl ?? signInUrl;
+  const ctaLabel = passwordSetupUrl
+    ? "Set Your Password"
+    : `Sign In to ${appName}`;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -30,14 +39,14 @@ export async function userInvitedTemplate(props: {
             <td style="padding:40px;">
               <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#384959;">You've been invited!</p>
               <p style="margin:0 0 24px;font-size:15px;color:#6A89A7;line-height:1.6;">
-                Hi ${inviteeName}, you've been added to ${appName} as an <strong>${roleLabel}</strong>. Sign in below to access your account.
+                Hi ${inviteeName}, you've been added to ${appName} as an <strong>${roleLabel}</strong>. ${passwordSetupUrl ? "Set a password below to access your account." : "Sign in below to access your account."}
               </p>
 
               <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
                 <tr>
                   <td>
-                    <a href="${signInUrl}" style="display:inline-block;background:#384959;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px;">
-                      Sign In to ${appName}
+                    <a href="${ctaUrl}" style="display:inline-block;background:#384959;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px;">
+                      ${ctaLabel}
                     </a>
                   </td>
                 </tr>
@@ -47,8 +56,13 @@ export async function userInvitedTemplate(props: {
                 Or copy this link into your browser:
               </p>
               <p style="margin:0;font-size:12px;color:#384959;word-break:break-all;">
-                <a href="${signInUrl}" style="color:#384959;">${signInUrl}</a>
+                <a href="${ctaUrl}" style="color:#384959;">${ctaUrl}</a>
               </p>
+              ${
+                passwordSetupUrl
+                  ? `<p style="margin:16px 0 0;font-size:12px;color:#6A89A7;">This link expires in 7 days.</p>`
+                  : ""
+              }
             </td>
           </tr>
           <!-- Footer -->
@@ -70,8 +84,8 @@ export async function userInvitedTemplate(props: {
 
 Hi ${inviteeName},
 
-Sign in here: ${signInUrl}
-
+${passwordSetupUrl ? "Set a password here" : "Sign in here"}: ${ctaUrl}
+${passwordSetupUrl ? "This link expires in 7 days.\n" : ""}
 If you weren't expecting this, you can safely ignore this email.`;
 
   return { html, text };

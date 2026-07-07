@@ -66,11 +66,21 @@ pnpm db:reset        # drop all tables + re-migrate (destroys all data)
 
 ## Docker
 
+Bundled Postgres (default):
+
 ```bash
 docker compose up -d           # start app + worker + postgres
 docker compose down            # stop all services
 docker compose logs -f app     # tail app logs
 docker compose logs -f worker  # tail worker logs
+```
+
+Your own external database instead — same commands, plus `-f docker-compose.external-db.yml`:
+
+```bash
+docker compose -f docker-compose.external-db.yml up -d
+docker compose -f docker-compose.external-db.yml down
+docker compose -f docker-compose.external-db.yml logs -f app
 ```
 
 Build the worker image separately:

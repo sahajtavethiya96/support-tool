@@ -115,12 +115,24 @@ function insertCannedResponse(editor: Editor, contentJson: string) {
 function CannedResponsePicker({
   editor,
   responses,
+  onOpenChange,
 }: {
   editor: Editor;
   responses: CannedResponseOption[];
+  /** Lifted to the parent editor so its compact-mode toolbar stays mounted
+   * while this popover is open — otherwise, opening the popover moves DOM
+   * focus onto its content (Radix's default auto-focus), which blurs the
+   * Tiptap editor and — in compact mode with no text yet — collapses the
+   * whole toolbar the popover lives in, closing it instantly. */
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
   const [query, setQuery] = useState("");
+
+  function setOpen(o: boolean) {
+    setOpenState(o);
+    onOpenChange?.(o);
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -190,10 +202,12 @@ function Toolbar({
   editor,
   tone,
   cannedResponses,
+  onCannedPickerOpenChange,
 }: {
   editor: Editor;
   tone: "default" | "warning";
   cannedResponses?: CannedResponseOption[];
+  onCannedPickerOpenChange?: (open: boolean) => void;
 }) {
   const divider = (
     <div
@@ -278,7 +292,11 @@ function Toolbar({
       {cannedResponses && cannedResponses.length > 0 && (
         <>
           {divider}
-          <CannedResponsePicker editor={editor} responses={cannedResponses} />
+          <CannedResponsePicker
+            editor={editor}
+            onOpenChange={onCannedPickerOpenChange}
+            responses={cannedResponses}
+          />
         </>
       )}
     </div>
@@ -302,6 +320,11 @@ export function RichTextEditor({
 }: Props) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [cannedPickerOpen, setCannedPickerOpen] = useState(false);
+
+  // Assigned right after useEditor() returns — referencing `editor` directly
+  // in handleKeyDown below would be circular at the type level (TS7022).
+  let currentEditor: Editor | null = null;
 
   const editor = useEditor({
     extensions: [
@@ -310,6 +333,8 @@ export function RichTextEditor({
       SlashCommand,
     ],
     content: parseRichTextContent(value),
+    // Without this, Toolbar's active-state highlighting lags a render behind.
+    shouldRerenderOnTransaction: true,
     onUpdate: ({ editor }) => onChange(JSON.stringify(editor.getJSON())),
     onFocus: () => {
       setFocused(true);
@@ -329,12 +354,34 @@ export function RichTextEditor({
         ),
       },
       handleKeyDown: (view, event) => {
-        if (
-          !onSubmit ||
-          event.key !== "Enter" ||
-          event.shiftKey ||
-          event.isComposing
-        ) {
+        if (event.key !== "Enter" || event.isComposing) {
+          return false;
+        }
+        // Plain Enter sends the message (below), so Shift+Enter stands in
+        // for a normal editor's Enter here.
+        if (event.shiftKey) {
+          if (!onSubmit || !currentEditor) {
+            return false;
+          }
+          if (currentEditor.isActive("listItem")) {
+            const isEmptyItem =
+              currentEditor.state.selection.$from.parent.content.size === 0;
+            // No .focus() — already focused, and chaining it can make
+            // .run() falsely return false, letting the default hard-break
+            // binding also fire on top of this.
+            return isEmptyItem
+              ? currentEditor.commands.liftListItem("listItem")
+              : currentEditor.commands.splitListItem("listItem");
+          }
+          // Mirrors Tiptap's own core "Enter" keymap fallback chain.
+          return currentEditor.commands.first(({ commands }) => [
+            () => commands.newlineInCode(),
+            () => commands.createParagraphNear(),
+            () => commands.liftEmptyBlock(),
+            () => commands.splitBlock(),
+          ]);
+        }
+        if (!onSubmit) {
           return false;
         }
         // Let the "/" command menu handle Enter (select item) while it's open.
@@ -365,6 +412,7 @@ export function RichTextEditor({
     },
     immediatelyRender: false,
   });
+  currentEditor = editor;
 
   useImperativeHandle(
     ref,
@@ -420,10 +468,11 @@ export function RichTextEditor({
       }}
       onDrop={() => setIsDragOver(false)}
     >
-      {(!compact || focused || !isRichTextEmpty(value)) && (
+      {(!compact || focused || cannedPickerOpen || !isRichTextEmpty(value)) && (
         <Toolbar
           cannedResponses={cannedResponses}
           editor={editor}
+          onCannedPickerOpenChange={setCannedPickerOpen}
           tone={tone}
         />
       )}

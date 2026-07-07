@@ -1,8 +1,11 @@
 # Plan: Password reset
 
-**Deferred** — flagged as a gap while implementing email/password login
-(`docs/authentication.md` § 2, "Password Rules"). Not built yet; this plan
-exists so it can be picked up later without re-deriving the design.
+**Shipped** (self-service path, #1 below). Also reused for admin-driven
+invites (`docs/authentication.md` § 2, "Inviting a New Agent/Admin") — an
+invited user has no `credential` account yet, so the invite email's
+password-setup link is minted the same way (`lib/password-setup-token.ts`)
+and lands on the same `/reset-password` page. #2 (admin-initiated reset for
+an already-existing, locked-out user) is not built — see Out of scope.
 
 ## Why this exists
 
@@ -108,20 +111,24 @@ behavior documented in `docs/authentication.md` § 8.
 
 ## Task checklist
 
-- [ ] `lib/email/templates/reset-password.tsx` (copy `magic-link.tsx`)
-- [ ] `lib/auth.ts` — `sendResetPassword` callback + audit call
-- [ ] `lib/auth.ts` — extend `hooks.before` to gate reset endpoints on `passwordLoginEnabled`
-- [ ] `app/(auth)/forgot-password/page.tsx` — request form
-- [ ] `app/(auth)/reset-password/page.tsx` — new-password form, token from search params
-- [ ] `auth-form.tsx` — "Forgot password?" link (password mode only)
-- [ ] Update `docs/authentication.md` § 2 "Password Rules" — remove the
+- [x] `lib/email/components/reset-password.tsx` + `lib/email/templates/reset-password.ts` (mirrors `magic-link.tsx`/`.ts`)
+- [x] `lib/auth.ts` — `sendResetPassword` callback + audit call
+- [x] `lib/auth.ts` — extend `hooks.before` to gate reset endpoints on `passwordLoginEnabled`
+- [x] `app/(auth)/forgot-password/page.tsx` — request form
+- [x] `app/(auth)/reset-password/page.tsx` — new-password form, token from search params
+- [x] `auth-form.tsx` — "Forgot password?" link (password mode only)
+- [x] Update `docs/authentication.md` § 2 "Password Rules" — remove the
       "no self-service reset yet" caveat once shipped
-- [ ] Manual test: request reset for a real inbox (or check the dev
-      SMTP-less console log), click the link, set a new password, confirm
-      old password no longer works and new one does
-- [ ] Manual test: request reset for a non-existent email — confirm the
+- [x] Manual test: request reset for a real inbox (dev SMTP-less console
+      log), click the link, set a new password, confirm old password no
+      longer works and new one does
+- [x] Manual test: request reset for a non-existent email — confirm the
       same generic success message shows (no enumeration leak)
-- [ ] (If building #2) `/admin/users` reset-password button + route + dialog
+- [x] Reused for admin-invite password setup (`lib/password-setup-token.ts`,
+      `app/api/users/route.ts`) — not part of the original plan, but the
+      same primitive turned out to also close the invite-flow gap
+- [ ] (#2, not built) `/admin/users` reset-password button + route + dialog
+      for an admin directly resetting an existing user's password
 
 ## Out of scope
 

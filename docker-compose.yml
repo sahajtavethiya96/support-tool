@@ -1,7 +1,11 @@
-# Self-hosted Support Tool — full stack: Postgres + app + background worker.
+# Self-hosted Support Tool — bundled Postgres + app + background worker.
+# This is the default, zero-config path:
 #
-#   1. cp .env.example .env   (set APP_SECRET + NEXT_PUBLIC_APP_URL; optional SMTP)
+#   1. cp .env.docker.example .env   (set APP_SECRET + NEXT_PUBLIC_APP_URL; optional SMTP)
 #   2. docker compose up -d
+#
+# Already have your own hosted Postgres (Neon, Supabase, RDS, etc.) and don't want this
+# bundled one? Use docker-compose.external-db.yml instead — see that file for usage.
 #
 # The one-shot `migrate` service runs DB migrations + seeds before app/worker start.
 
@@ -26,8 +30,6 @@ services:
     image: support-tool:latest
     command: pnpm setup
     env_file: .env
-    environment:
-      DATABASE_URL: postgresql://support:support@postgres:5432/support_tool
     depends_on:
       postgres:
         condition: service_healthy
@@ -38,8 +40,6 @@ services:
     image: support-tool:latest
     command: pnpm start
     env_file: .env
-    environment:
-      DATABASE_URL: postgresql://support:support@postgres:5432/support_tool
     ports:
       - "3000:3000"
     volumes:
@@ -56,8 +56,6 @@ services:
     image: support-tool:latest
     command: pnpm worker:start
     env_file: .env
-    environment:
-      DATABASE_URL: postgresql://support:support@postgres:5432/support_tool
     volumes:
       - uploads:/app/uploads
     depends_on:

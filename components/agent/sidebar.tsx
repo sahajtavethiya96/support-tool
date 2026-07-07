@@ -14,6 +14,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ADMIN_ROLE, PRODUCT_NAME } from "@/config/platform";
+import { getInitials } from "@/lib/utils";
 import { SignOutButton } from "./sign-out-button";
 
 interface AgentSidebarProps {
@@ -119,15 +120,15 @@ export function AgentSidebar({
       </nav>
 
       {/* Agent info */}
-      <div className="px-4 py-4 border-t border-sidebar-border">
-        <div className="flex items-center gap-2.5 mb-1">
-          <div className="size-7 rounded-full bg-sidebar-accent flex items-center justify-center shrink-0">
-            <span className="text-2xs font-semibold text-sidebar-accent-foreground">
-              {userName.slice(0, 2).toUpperCase()}
+      <div className="px-3 py-3 border-t border-sidebar-border">
+        <div className="flex items-center gap-2.5 rounded-md bg-sidebar-accent/40 px-2.5 py-2">
+          <div className="size-8 rounded-full bg-sidebar-primary flex items-center justify-center shrink-0">
+            <span className="text-2xs font-semibold text-sidebar-primary-foreground">
+              {getInitials(userName)}
             </span>
           </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-sidebar-accent-foreground truncate">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-sidebar-accent-foreground truncate">
               {userName}
             </p>
             <p className="text-2xs text-sidebar-foreground truncate">
@@ -135,7 +136,7 @@ export function AgentSidebar({
             </p>
           </div>
           {isAdmin && (
-            <ShieldCheckIcon className="size-3.5 text-sidebar-foreground shrink-0 ml-auto" />
+            <ShieldCheckIcon className="size-3.5 text-sidebar-foreground shrink-0" />
           )}
         </div>
         <SignOutButton />

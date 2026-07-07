@@ -27,7 +27,7 @@ Below is the decision made per item and where its plan lives.
 | 10 | CSAT + CSV export | **Deferred** — revisit later, no plan yet | — |
 | 11 | `/api/health` endpoint | **Deferred** — revisit later, no plan yet | — |
 | 12 | Email/password login + per-method sign-in toggles | **Built** — see `docs/authentication.md` § 2 | — |
-| 13 | Password reset (self-service + admin-initiated) | **Deferred** — gap found while building #12 | [08-password-reset.md](./08-password-reset.md) |
+| 13 | Password reset (self-service + admin-initiated) | **Built** (self-service; also reused to fix the admin-invite flow, which previously created accounts with no way to sign in) — admin-initiated reset for an already-existing user is still deferred, see `docs/authentication.md` § 2 | [08-password-reset.md](./08-password-reset.md) |
 | 14 | Open-source readiness (LICENSE, `package.json` metadata, CI, templates) | **Deferred** — prioritized functionality first | [09-open-source-readiness.md](./09-open-source-readiness.md) |
 | 15 | Real-time ticket list + live ticket detail updates | **Build** — Pusher Channels, no polling fallback (explicit decision) | [10-realtime-updates.md](./10-realtime-updates.md) |
 

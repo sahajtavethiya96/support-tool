@@ -11,6 +11,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ThemeResetScript } from "@/components/theme/theme-reset-script";
 import { Button } from "@/components/ui/button";
 import { PRODUCT_NAME } from "@/config/platform";
 import { getCurrentSession } from "@/lib/authz";
@@ -50,6 +51,7 @@ export default async function HomePage() {
 
   return (
     <div className="min-h-screen bg-public flex flex-col">
+      <ThemeResetScript />
       {/* ── Header ── */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-sand sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">

@@ -35,8 +35,8 @@ export async function GET(_request: NextRequest) {
     theme: row?.theme ?? "default",
     appearanceMode: row?.appearanceMode ?? "auto",
     passwordLoginEnabled: row?.passwordLoginEnabled ?? true,
-    magicLinkEnabled: row?.magicLinkEnabled ?? true,
-    googleLoginEnabled: row?.googleLoginEnabled ?? true,
+    magicLinkEnabled: row?.magicLinkEnabled ?? false,
+    googleLoginEnabled: row?.googleLoginEnabled ?? false,
   });
 }
 
@@ -68,9 +68,9 @@ export async function PATCH(request: NextRequest) {
   const passwordLoginEnabled =
     body.passwordLoginEnabled ?? existing?.passwordLoginEnabled ?? true;
   const magicLinkEnabled =
-    body.magicLinkEnabled ?? existing?.magicLinkEnabled ?? true;
+    body.magicLinkEnabled ?? existing?.magicLinkEnabled ?? false;
   const googleLoginEnabled =
-    body.googleLoginEnabled ?? existing?.googleLoginEnabled ?? true;
+    body.googleLoginEnabled ?? existing?.googleLoginEnabled ?? false;
 
   if (body.theme !== undefined && !VALID_THEMES.has(theme)) {
     return NextResponse.json({ error: "Invalid theme." }, { status: 400 });

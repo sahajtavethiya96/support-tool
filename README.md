@@ -118,21 +118,42 @@ Open `http://localhost:3000`.
 
 ## Docker (Self-Hosted)
 
-The included `docker-compose.yml` runs the full stack: PostgreSQL, the Next.js app,
-and the pg-boss background worker.
+Two ways to run this, depending on whether you want Postgres bundled or you already
+have your own hosted database (Neon, Supabase, RDS, etc.):
+
+### Option A — Bundled Postgres (default, zero-config)
+
+`docker-compose.yml` runs the full stack: PostgreSQL, the Next.js app, and the pg-boss
+background worker.
 
 ```bash
-cp .env.example .env
-# Set APP_SECRET (32+ chars) and NEXT_PUBLIC_APP_URL.
+cp .env.docker.example .env
+# Set APP_SECRET (32+ chars) and NEXT_PUBLIC_APP_URL. DATABASE_URL is already
+# pre-filled to match the bundled Postgres below — no edit needed.
 docker compose up -d
 ```
 
-On startup a one-shot `migrate` service runs database migrations and seeds the default
-statuses & categories before the app and worker start. The app is served on
-**http://localhost:3000**.
+### Option B — Your own external database
 
-`DATABASE_URL` is wired automatically to the bundled Postgres — you don't need to set it
-in `.env` for Docker. Uploaded attachments persist in the `uploads` volume.
+`docker-compose.external-db.yml` runs the same app + worker but with **no** bundled
+Postgres service at all — use this file *instead of* `docker-compose.yml`, not
+alongside it:
+
+```bash
+cp .env.docker.example .env
+# Replace DATABASE_URL with your own connection string.
+docker compose -f docker-compose.external-db.yml up -d
+```
+
+Every `docker compose` command below (`logs`, `down`, `run`, etc.) needs the same
+`-f docker-compose.external-db.yml` flag if you're using Option B.
+
+---
+
+On startup a one-shot `migrate` service runs database migrations and seeds the default
+statuses & categories before the app and worker start (against whichever database you
+configured above). The app is served on **http://localhost:3000**. Uploaded attachments
+persist in the `uploads` volume.
 
 ```bash
 docker compose logs -f app worker     # follow logs
