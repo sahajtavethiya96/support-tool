@@ -8,7 +8,10 @@ WORKDIR /app
 # ── Install dependencies (cached on lockfile) ─────────────────────────────────
 FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+ENV NODE_OPTIONS="--max-old-space-size=512"
+
+RUN pnpm config set dangerouslyAllowAllBuilds true \
+  && pnpm install --frozen-lockfile --network-concurrency=1 --child-concurrency=1
 
 # ── Build the Next.js app ─────────────────────────────────────────────────────
 FROM base AS build

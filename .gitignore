@@ -46,3 +46,4 @@ next-env.d.ts
 *.sql.zst
 *.dump
 krova-db-*
+.pnpm-store/
