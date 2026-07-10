@@ -67,7 +67,18 @@ Agents and admins authenticate via Better Auth with three supported methods:
 | Magic Link | Agent enters email → receives a one-time sign-in link → clicks it → session created. Requires SMTP to be configured (`lib/email`). |
 | Google OAuth | Agent clicks "Sign in with Google" → OAuth flow → session created. Requires `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` to be set. |
 
-There is **no public self-registration** for any method — a user account only ever comes into existence via `pnpm create:admin` (script), an admin promoting an existing magic-link/Google sign-up (`pnpm make:admin` or the admin panel), or an admin inviting them from `/admin/users` (see "Inviting a New Agent/Admin" below). Password accounts are never created by an open sign-up form.
+There is **no public self-registration** for any method — a user account only ever comes into existence via the first-run setup wizard (`/setup`, see below), `pnpm create:admin` (script), an admin promoting an existing magic-link/Google sign-up (`pnpm make:admin` or the admin panel), or an admin inviting them from `/admin/users` (see "Inviting a New Agent/Admin" below). Password accounts are never created by an open sign-up form.
+
+### First-Run Setup (`/setup`)
+
+On a brand-new install (no admin user exists yet), the operator does **not** need to run a CLI command — the app serves a guided setup wizard so the first admin can be created from the browser:
+
+1. Any visit to `/` or `/login` redirects to `/setup` while no admin exists (see the `isSetupComplete()` guard in `lib/setup.ts` — "setup is complete" ≡ "at least one `admin` user exists").
+2. The wizard (`app/(setup)/setup`) collects a color theme + appearance in step 1 (live preview via `ThemeProvider`) and the admin's name / email / password in step 2.
+3. `POST /api/setup` creates the admin (via `createAdminUser` in `lib/bootstrap-admin.ts`, the same path as `pnpm create:admin`), seeds default statuses/categories/priorities (`lib/seed-defaults.ts`), and persists the chosen theme to `platform_settings`.
+4. The wizard then auto-signs-in with the just-created credentials and lands on `/dashboard`.
+
+**Security:** `POST /api/setup` and the `/setup` page are intentionally unauthenticated (there's no admin to authenticate as yet) but **self-disabling** — both check `isSetupComplete()` and return `403` / redirect to `/login` the moment an admin exists, so the bootstrap path can never be replayed to mint a second admin on a live install. `pnpm create:admin` remains available as a CLI alternative.
 
 ### Sign-In Method Toggles
 

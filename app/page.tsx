@@ -15,6 +15,7 @@ import { ThemeResetScript } from "@/components/theme/theme-reset-script";
 import { Button } from "@/components/ui/button";
 import { PRODUCT_NAME } from "@/config/platform";
 import { getCurrentSession } from "@/lib/authz";
+import { isSetupComplete } from "@/lib/setup";
 
 const STEPS = [
   {
@@ -44,6 +45,12 @@ const TRUST = [
 ];
 
 export default async function HomePage() {
+  // Before an admin exists, route first-time operators to the setup wizard
+  // instead of the customer landing page.
+  if (!(await isSetupComplete())) {
+    redirect("/setup");
+  }
+
   const session = await getCurrentSession();
   if (session) {
     redirect("/tickets");

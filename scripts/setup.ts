@@ -44,7 +44,9 @@ console.log("\n→ Seeding default statuses & categories…");
 run("pnpm db:seed");
 
 console.log(
-  "\n✅ Setup complete. Now create your first admin:\n" +
-    '  pnpm create:admin you@example.com "Your Name" "a-strong-password"\n' +
-    "\nThen start the app with `pnpm start` (and the worker with `pnpm worker:start`)."
+  "\n✅ Setup complete. Start the app with `pnpm start` (and the worker with " +
+    "`pnpm worker:start`), then open it in your browser — the first-run setup " +
+    "wizard at /setup walks you through creating your admin account.\n" +
+    "\nPrefer the command line? You can still run:\n" +
+    '  pnpm create:admin you@example.com "Your Name" "a-strong-password"'
 );

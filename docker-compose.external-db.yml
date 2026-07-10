@@ -40,7 +40,7 @@ services:
     command: pnpm start
     env_file: .env
     ports:
-      - "3000:3000"
+      - "3000"
     volumes:
       - uploads:/app/uploads
     depends_on:
