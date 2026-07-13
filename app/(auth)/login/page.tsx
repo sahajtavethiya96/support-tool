@@ -9,6 +9,11 @@ export const metadata = {
   title: `Sign in · ${PRODUCT_NAME}`,
 };
 
+// Setup state and enabled login methods come from the database and are
+// admin-toggleable at runtime — they must be read per request, never at build
+// time (the Docker builder has no database, and a baked answer would go stale).
+export const dynamic = "force-dynamic";
+
 export default async function LoginPage() {
   // Fresh install with no admin yet — there's nothing to sign into. Send them
   // through the first-run wizard instead.
