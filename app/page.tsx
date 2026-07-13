@@ -17,6 +17,11 @@ import { PRODUCT_NAME } from "@/config/platform";
 import { getCurrentSession } from "@/lib/authz";
 import { isSetupComplete } from "@/lib/setup";
 
+// The setup check queries the database, which must happen per request — never
+// at build time (the Docker builder has no database, and a baked answer would
+// be stale anyway).
+export const dynamic = "force-dynamic";
+
 const STEPS = [
   {
     icon: PaperPlaneTiltIcon,
