@@ -19,6 +19,7 @@ import { requireAgent } from "@/lib/authz";
 import { getCannedResponses } from "@/lib/canned-responses";
 import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
+import { getTicketTags } from "@/lib/tags";
 import {
   getTicketCategories,
   getTicketPriorities,
@@ -61,14 +62,14 @@ export default async function AgentTicketDetailPage({ params }: Props) {
     notFound();
   }
 
-  const [statuses, categories, priorities, cannedResponses] = await Promise.all(
-    [
+  const [statuses, categories, priorities, cannedResponses, tags] =
+    await Promise.all([
       getTicketStatuses(),
       getTicketCategories(),
       getTicketPriorities(),
       getCannedResponses(),
-    ]
-  );
+      getTicketTags(ticketId),
+    ]);
 
   const statusMap = Object.fromEntries(statuses.map((s) => [s.slug, s]));
   const categoryMap = Object.fromEntries(categories.map((c) => [c.slug, c]));
@@ -111,12 +112,12 @@ export default async function AgentTicketDetailPage({ params }: Props) {
   const isOpen = !(statusMap[ticket.status]?.isClosedState ?? false);
 
   return (
-    <div className="p-4 lg:p-6">
+    <div className="lg:flex lg:h-full lg:min-h-0 lg:flex-col">
       <TicketDetailRealtime ticketId={ticket.id} />
       {/* Breadcrumb — stays pinned to the top of the scroll area, carrying the
           ticket's subject + status along so context stays visible while
           scrolled away from the ticket header card below. */}
-      <div className="sticky top-0 z-10 -mx-4 lg:-mx-6 mb-5 flex h-12 items-center gap-2 bg-surface px-4 lg:px-6">
+      <div className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-4 lg:px-8">
         <Link
           className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           href="/tickets"
@@ -139,167 +140,173 @@ export default async function AgentTicketDetailPage({ params }: Props) {
         </span>
       </div>
 
-      <div className="flex gap-6 items-start flex-col lg:flex-row">
-        {/* ── Main panel ── */}
-        <div className="flex-1 min-w-0 space-y-4">
-          {/* Ticket header */}
-          <div className="bg-card rounded-xl border border-border shadow-soft p-5">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="text-xs text-muted-foreground font-mono">
-                    #{ticket.ticketNumber}
+      {/* Two-column row — no gap and no padding on the row itself (Kanbanica
+          structure): the divider is the sidebar's own border-l sitting flush
+          against the main column, and all padding lives INSIDE each scroll
+          container so scrollbars sit at the column edges, not floating in a
+          gap. */}
+      <div className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:flex-row lg:items-stretch lg:gap-0">
+        {/* ── Main panel ── a full-height flex column: the message thread
+            scrolls in the inner container, while the reply form below is pinned
+            static at the bottom (Slack-style) and never scrolls. */}
+        <div className="flex w-full min-w-0 flex-col lg:min-h-0 lg:flex-1">
+          {/* Scrollable message thread — padding lives inside so the scrollbar
+              sits at the column edge, flush to the sidebar divider. */}
+          <div className="space-y-4 overflow-x-hidden px-4 py-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-8 lg:py-6">
+            {/* Ticket header */}
+            <div className="bg-card rounded-xl border border-border shadow-soft p-5">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-xs text-muted-foreground font-mono">
+                      #{ticket.ticketNumber}
+                    </span>
+                    <span className="text-muted-foreground text-xs">·</span>
+                    <span className="text-xs text-muted-foreground">
+                      {categoryMap[ticket.category]?.label ?? ticket.category}
+                    </span>
+                    <span className="text-muted-foreground text-xs">·</span>
+                    <span className="text-xs text-muted-foreground">
+                      <LocalDateTime date={ticket.createdAt} />
+                    </span>
+                  </div>
+                  <h1 className="text-lg font-semibold text-foreground wrap-break-word">
+                    {ticket.subject}
+                  </h1>
+                </div>
+                <span
+                  className={`inline-flex items-center rounded border px-2.5 py-1 text-xs font-medium shrink-0 ${COLOR_BADGE[statusMap[ticket.status]?.color ?? "slate"] ?? ""}`}
+                >
+                  {statusMap[ticket.status]?.label ?? ticket.status}
+                </span>
+              </div>
+            </div>
+
+            {/* Original description — customer's first message (left) */}
+            <div className="flex justify-start gap-2">
+              <div className="size-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium shrink-0">
+                {getInitials(ticket.customerName)}
+              </div>
+              <div className="min-w-0 max-w-[85%] wrap-break-word bg-accent rounded-xl border border-border p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-medium text-foreground">
+                    {ticket.customerName}
                   </span>
-                  <span className="text-muted-foreground text-xs">·</span>
                   <span className="text-xs text-muted-foreground">
-                    {categoryMap[ticket.category]?.label ?? ticket.category}
+                    Customer
                   </span>
-                  <span className="text-muted-foreground text-xs">·</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground ml-auto shrink-0">
                     <LocalDateTime date={ticket.createdAt} />
                   </span>
                 </div>
-                <h1 className="text-lg font-semibold text-foreground wrap-break-word">
-                  {ticket.subject}
-                </h1>
+                <RichTextContent content={ticket.description} />
+                {ticketLevelAttachments.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <DeletableTicketAttachments
+                      items={ticketLevelAttachments.map((a) => ({
+                        id: a.id,
+                        url: storage.url(a.storageKey),
+                        filename: a.filename,
+                        mimeType: a.mimeType,
+                        fileSize: a.fileSize,
+                      }))}
+                      ticketId={ticket.id}
+                    />
+                  </div>
+                )}
               </div>
-              <span
-                className={`inline-flex items-center rounded border px-2.5 py-1 text-xs font-medium shrink-0 ${COLOR_BADGE[statusMap[ticket.status]?.color ?? "slate"] ?? ""}`}
-              >
-                {statusMap[ticket.status]?.label ?? ticket.status}
-              </span>
             </div>
-          </div>
 
-          {/* Original description — customer's first message (left) */}
-          <div className="flex justify-start gap-2">
-            <div className="size-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium shrink-0">
-              {getInitials(ticket.customerName)}
-            </div>
-            <div className="max-w-[85%] bg-accent rounded-xl border border-border p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm font-medium text-foreground">
-                  {ticket.customerName}
-                </span>
-                <span className="text-xs text-muted-foreground">Customer</span>
-                <span className="text-xs text-muted-foreground ml-auto shrink-0">
-                  <LocalDateTime date={ticket.createdAt} />
-                </span>
-              </div>
-              <RichTextContent content={ticket.description} />
-              {ticketLevelAttachments.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-border">
-                  <DeletableTicketAttachments
-                    items={ticketLevelAttachments.map((a) => ({
-                      id: a.id,
-                      url: storage.url(a.storageKey),
-                      filename: a.filename,
-                      mimeType: a.mimeType,
-                      fileSize: a.fileSize,
-                    }))}
-                    ticketId={ticket.id}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Comment thread */}
-          {comments.map((comment) => {
-            const isCustomer = comment.authorRole === "customer";
-            const commentAttachments =
-              attachmentsByComment.get(comment.id) ?? [];
-            const avatar = (
-              <div
-                className={`size-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0 ${
-                  isCustomer
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-stone text-white"
-                }`}
-              >
-                {getInitials(comment.authorName)}
-              </div>
-            );
-            return (
-              <div
-                className={`flex gap-2 ${isCustomer ? "justify-start" : "justify-end"}`}
-                key={comment.id}
-              >
-                {isCustomer && avatar}
+            {/* Comment thread */}
+            {comments.map((comment) => {
+              const isCustomer = comment.authorRole === "customer";
+              const commentAttachments =
+                attachmentsByComment.get(comment.id) ?? [];
+              const avatar = (
                 <div
-                  className={`max-w-[85%] rounded-xl border p-4 ${
-                    comment.isInternal
-                      ? "bg-amber-50 border-amber-200"
-                      : isCustomer
-                        ? "bg-accent border-border"
-                        : "bg-card border-border"
+                  className={`size-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0 ${
+                    isCustomer
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-stone text-white"
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className="text-sm font-medium text-foreground">
-                      {comment.authorName}
-                    </span>
-                    <span className="text-xs text-muted-foreground capitalize">
-                      {comment.authorRole}
-                    </span>
-                    {comment.isInternal && (
-                      <span className="flex items-center gap-1 text-xs text-amber-700 bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5">
-                        <LockSimpleIcon className="size-3" />
-                        Internal note
-                      </span>
-                    )}
-                    <span className="text-xs text-muted-foreground ml-auto shrink-0">
-                      <LocalDateTime date={comment.createdAt} />
-                    </span>
-                  </div>
-                  <RichTextContent content={comment.content} />
-
-                  {commentAttachments.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-border">
-                      <DeletableTicketAttachments
-                        items={commentAttachments.map((a) => ({
-                          id: a.id,
-                          url: storage.url(a.storageKey),
-                          filename: a.filename,
-                          mimeType: a.mimeType,
-                          fileSize: a.fileSize,
-                        }))}
-                        ticketId={ticket.id}
-                      />
-                    </div>
-                  )}
+                  {getInitials(comment.authorName)}
                 </div>
-                {!isCustomer && avatar}
-              </div>
-            );
-          })}
+              );
+              return (
+                <div
+                  className={`flex gap-2 ${isCustomer ? "justify-start" : "justify-end"}`}
+                  key={comment.id}
+                >
+                  {isCustomer && avatar}
+                  <div
+                    className={`min-w-0 max-w-[85%] wrap-break-word rounded-xl border p-4 ${
+                      comment.isInternal
+                        ? "bg-amber-50 border-amber-200"
+                        : isCustomer
+                          ? "bg-accent border-border"
+                          : "bg-card border-border"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className="text-sm font-medium text-foreground">
+                        {comment.authorName}
+                      </span>
+                      <span className="text-xs text-muted-foreground capitalize">
+                        {comment.authorRole}
+                      </span>
+                      {comment.isInternal && (
+                        <span className="flex items-center gap-1 text-xs text-amber-700 bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5">
+                          <LockSimpleIcon className="size-3" />
+                          Internal note
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground ml-auto shrink-0">
+                        <LocalDateTime date={comment.createdAt} />
+                      </span>
+                    </div>
+                    <RichTextContent content={comment.content} />
 
-          {/* Reply form — stays pinned to the bottom of the screen while scrolling.
-              The transparent pt-4 on the sticky wrapper keeps a visible gap above
-              the card as messages scroll behind it, instead of butting up flush.
-              The bg-surface spacer below the card gives it breathing room from the
-              true viewport edge WITHOUT leaving a see-through gap — sticky's own
-              `bottom` offset would leave a transparent strip there that scrolling
-              message content shows through, since sticky elements don't stop the
-              page underneath from scrolling. */}
+                    {commentAttachments.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <DeletableTicketAttachments
+                          items={commentAttachments.map((a) => ({
+                            id: a.id,
+                            url: storage.url(a.storageKey),
+                            filename: a.filename,
+                            mimeType: a.mimeType,
+                            fileSize: a.fileSize,
+                          }))}
+                          ticketId={ticket.id}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {!isCustomer && avatar}
+                </div>
+              );
+            })}
+
+            <ScrollToBottomOnMount />
+          </div>
+
+          {/* Reply form — pinned static at the bottom of the panel (Slack-style):
+              a shrink-0 sibling OUTSIDE the scroll area, so it never moves while
+              the messages scroll above it. Same horizontal padding as the
+              thread so it stays aligned. */}
           {isOpen && (
-            <div className="sticky bottom-0 z-10 -ml-2 pt-4">
-              <div className="bg-card rounded-xl border border-border shadow-soft p-5">
-                <AgentReplyForm
-                  cannedResponses={cannedResponses}
-                  ticketId={ticket.id}
-                  totalAttachments={attachments.length}
-                />
-              </div>
-              <div className="h-3 bg-surface" />
+            <div className="shrink-0 px-4 pb-4 pt-2 lg:px-8 lg:pb-6">
+              <AgentReplyForm
+                cannedResponses={cannedResponses}
+                ticketId={ticket.id}
+                totalAttachments={attachments.length}
+              />
             </div>
           )}
-
-          <ScrollToBottomOnMount />
         </div>
 
         {/* ── Right sidebar ── */}
-        <div className="w-full lg:w-72 shrink-0 lg:sticky lg:top-16 lg:self-start">
+        <div className="w-full shrink-0 px-4 pb-5 lg:w-72 lg:sticky lg:top-12 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-border lg:px-6 lg:py-6">
           <TicketInfoSidebar
             activity={activity}
             agents={agents}
@@ -308,6 +315,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
             isAdmin={session.role === ADMIN_ROLE}
             priorities={priorities}
             statuses={statuses}
+            tags={tags}
             ticket={ticket}
           />
         </div>

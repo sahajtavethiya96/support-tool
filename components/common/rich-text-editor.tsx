@@ -83,7 +83,7 @@ function ToolbarButton({
         "flex size-7 items-center justify-center rounded transition-colors disabled:opacity-40",
         active
           ? "bg-primary/10 text-foreground"
-          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+          : "text-foreground hover:bg-accent"
       )}
       disabled={disabled}
       onMouseDown={(e) => {
@@ -153,7 +153,7 @@ function CannedResponsePicker({
     >
       <PopoverTrigger asChild>
         <button
-          className="flex size-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="flex size-7 items-center justify-center rounded text-foreground transition-colors hover:bg-accent"
           onMouseDown={(e) => e.preventDefault()}
           title="Insert canned response"
           type="button"

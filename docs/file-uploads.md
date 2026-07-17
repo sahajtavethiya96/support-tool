@@ -2,7 +2,7 @@
 
 ## Overview
 
-Customers and agents can attach files to tickets and comments. Files are stored via files-sdk — local filesystem in development, S3-compatible object storage in production.
+Customers and agents can attach files to tickets and comments. Files are stored via the driver-switched adapter in `lib/storage.ts` — local disk by default, or S3/Cloudflare R2 via [files-sdk](https://files-sdk.dev) when configured. See `STORAGE_DRIVER` below.
 
 ---
 
@@ -46,7 +46,9 @@ If any check fails, return `400` with a descriptive `{ error: string }`.
 
 ## Storage
 
-Files are stored via files-sdk (`lib/storage.ts`).
+Files are stored via the driver-switched adapter in `lib/storage.ts`. All
+three drivers implement the same interface (`upload`, `download`, `delete`,
+`url`) so nothing else in the app changes when you switch drivers.
 
 ### Storage Key Format
 
@@ -58,21 +60,81 @@ Example: `tickets/cm3abc123/cm9xyz456/screenshot.png`
 
 The `uuid` segment ensures no filename collisions if the same filename is uploaded multiple times.
 
-### Local Development
+### `STORAGE_DRIVER` — choosing a driver
 
-- Driver: `fs`
-- Files stored in `./uploads/` at the project root.
-- Served via `/api/files/[...key]` route.
+Set via env var (see `.env.example`). Validated at boot in `lib/env.ts` — an
+`s3`/`r2` driver missing its required config throws immediately on startup,
+not on first upload attempt.
 
-### Production
+| `STORAGE_DRIVER` | Backend | Required env vars |
+|---|---|---|
+| `local` (default) | Local disk | none |
+| `s3` | AWS S3, or any S3-compatible provider | `S3_BUCKET`, `S3_REGION` (+ AWS credentials — see below) |
+| `r2` | Cloudflare R2 | `R2_BUCKET`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` |
 
-- Set `STORAGE_DRIVER=s3` and the corresponding S3/R2/GCS credentials in env.
-- No app code changes required — the adapter layer handles it.
+Optional for either cloud driver: `STORAGE_PUBLIC_BASE_URL` (a CDN/custom
+domain bound to the bucket). Support Tool never needs it — see "Serving
+files" below — it only matters if you also point other tooling at the
+bucket directly.
+
+#### `local` (local disk, default)
+
+- Files stored in `./uploads/` at the project root — `/app/uploads` inside
+  the Docker image (`Dockerfile` sets `WORKDIR /app`).
+- **In Docker, this directory MUST be a persistent volume, or every
+  redeploy wipes all uploaded files** (the container filesystem resets
+  from the image each time). `docker-compose.yml` and
+  `docker-compose.external-db.yml` already mount one — pinned to the
+  literal name `support_tool_uploads` (not left to Compose's default
+  `<project>_<volume>` auto-naming), because some deploy tools don't keep
+  the compose project name stable across redeploys, which silently
+  creates a fresh, empty volume each time and orphans the old one.
+- If you deploy via a platform that generates its own Compose invocation
+  (Dokploy, Coolify, etc.) rather than running `docker compose up -d`
+  against these files directly, verify on the host that the SAME volume
+  name is reused across deploys: `docker volume ls`, then
+  `docker volume inspect support_tool_uploads` should show the same
+  volume before and after a redeploy, with `Mountpoint` contents that
+  persist.
+
+#### `s3` / `r2` (cloud object storage)
+
+- Implemented via [files-sdk](https://files-sdk.dev) (`files-sdk/s3` /
+  `files-sdk/r2`), dynamically imported only when selected — the default
+  `local` path never loads it, so there's no added cold-start cost for
+  deployments that don't use it.
+- S3 credentials come from the standard AWS credential chain
+  (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars, an IAM role,
+  or a shared profile) — not a Support Tool-specific variable.
+- R2 credentials (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`) are read
+  directly by the adapter under those exact names.
+- Survives host loss and works across multiple app replicas — no volume
+  to manage, unlike `local`.
+- Any other S3-compatible provider (MinIO, DigitalOcean Spaces, Backblaze
+  B2, Wasabi, …) also works through the `s3` driver by pointing it at a
+  custom endpoint — see [files-sdk's S3 adapter docs](https://files-sdk.dev/adapters/s3)
+  if you need that; `lib/storage.ts` would need one extra option passed
+  through (`endpoint`) to expose it — not wired up today since no request
+  for it yet.
+
+### Serving files
+
+Regardless of driver, `storage.url(key)` always returns
+`/api/files/{key}` — never a direct or signed cloud URL. `GET
+/api/files/[...key]` calls `storage.download()` under the hood (works
+identically for every driver) and streams the bytes back. This is
+deliberate, not a limitation:
+
+- Keeps `storage.url()` **synchronous** — callers build it inline in
+  `.map()` (e.g. `items.map(a => ({ url: storage.url(a.storageKey) }))`)
+  without awaiting per attachment.
+- Keeps ticket-attachment access control in Support Tool's own route
+  rather than handing out cloud URLs (signed or public) directly.
 
 ### DB Storage
 
 - The `ticket_attachments` table stores the **storage key**, never a full URL.
-- Serving URLs are generated on demand: `storage.url(key)` → `/api/files/{key}` or a signed S3 URL.
+- Serving URLs are generated on demand via `storage.url(key)` — see above.
 - Never persist URLs in the database.
 
 ---

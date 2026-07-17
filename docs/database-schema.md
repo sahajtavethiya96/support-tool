@@ -221,13 +221,40 @@ ticket_activity
 ├── action            text NOT NULL
 │                     ← 'ticket_created' | 'status_changed' | 'assigned' | 'unassigned'
 │                        'comment_added' | 'internal_note_added' | 'ticket_closed'
-│                        'ticket_reopened' | 'attachment_added'
+│                        'ticket_reopened' | 'attachment_added' | 'tag_added' | 'tag_removed'
 ├── metadata          jsonb            ← e.g. { from: 'open', to: 'in_progress' }
 └── created_at        timestamp with time zone NOT NULL DEFAULT NOW()
 
 Indexes:
 - ticket_id
 - created_at
+```
+
+### `tags`
+
+Freeform, shared tag pool — any agent can create a tag by typing it on a ticket (no admin management screen, unlike statuses/categories/priorities).
+
+```
+tags
+├── id                text PK (cuid2)
+├── name              text NOT NULL UNIQUE   ← normalized: trimmed, collapsed whitespace, lowercased
+└── created_at        timestamp with time zone NOT NULL DEFAULT NOW()
+```
+
+### `ticket_tags`
+
+Many-to-many join between `tickets` and `tags`.
+
+```
+ticket_tags
+├── id                text PK (cuid2)
+├── ticket_id         text NOT NULL → tickets.id (CASCADE DELETE)
+├── tag_id            text NOT NULL → tags.id (CASCADE DELETE)
+└── created_at        timestamp with time zone NOT NULL DEFAULT NOW()
+
+Indexes:
+- (ticket_id, tag_id) unique
+- tag_id
 ```
 
 ---
@@ -251,7 +278,8 @@ These are provided by the KROVA scaffold and do not need to be created:
 db/schema/
 ├── auth.ts            ← user, session, account, verification (Better Auth managed)
 ├── tickets.ts         ← tickets, ticket_comments, ticket_attachments, ticket_activity
-├── ticket-config.ts   ← ticket_statuses, ticket_categories
+├── ticket-config.ts   ← ticket_statuses, ticket_categories, ticket_priorities
+├── tags.ts            ← tags, ticket_tags
 ├── api-keys.ts        ← api_keys
 ├── settings.ts        ← platform_settings
 ├── audit-logs.ts      ← audit_logs (scaffold)

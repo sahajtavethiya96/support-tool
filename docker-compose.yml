@@ -88,4 +88,13 @@ services:
 
 volumes:
   pgdata:
+    name: support_tool_pgdata
+  # Pinned to a literal name (not just "uploads") on purpose: Docker Compose
+  # namespaces unnamed volumes as "<compose-project-name>_<volume-name>". Some
+  # deploy tools (observed with Dokploy) don't keep the compose project name
+  # perfectly stable across redeploys, which silently creates a NEW, empty
+  # volume each time — old uploads aren't deleted, just orphaned and
+  # invisible to the new container. Pinning the name guarantees every deploy
+  # reattaches to the exact same volume regardless of project-name quirks.
   uploads:
+    name: support_tool_uploads

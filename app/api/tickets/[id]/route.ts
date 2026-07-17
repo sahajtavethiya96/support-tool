@@ -7,6 +7,7 @@ import { ticketActivity, ticketAttachments, tickets } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
+import { getTicketTags } from "@/lib/tags";
 import {
   getTicketCategories,
   getTicketPriorities,
@@ -58,7 +59,8 @@ export async function GET(
   if (!ticket) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
-  return NextResponse.json(ticket);
+  const tags = await getTicketTags(id);
+  return NextResponse.json({ ...ticket, tags });
 }
 
 // PATCH /api/tickets/[id] — update status, category, or assignedAgentId

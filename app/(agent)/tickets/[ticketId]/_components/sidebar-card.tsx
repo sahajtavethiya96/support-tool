@@ -16,6 +16,11 @@ interface Props {
   contentClassName?: string;
   defaultOpen?: boolean;
   icon?: ReactNode;
+  onOpenChange?: (open: boolean) => void;
+  /** Controlled open state — pass together with `onOpenChange` for accordion
+   *  behavior (e.g. only one SidebarCard open at a time). Omit both to fall
+   *  back to internal state seeded from `defaultOpen`. */
+  open?: boolean;
   title: string;
   titleClassName?: string;
 }
@@ -26,11 +31,15 @@ export function SidebarCard({
   icon,
   children,
   defaultOpen = true,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
   className,
   contentClassName,
   titleClassName,
 }: Props) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = controlledOnOpenChange ?? setUncontrolledOpen;
 
   return (
     <Collapsible

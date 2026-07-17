@@ -22,6 +22,7 @@ import type {
 import { COLOR_BADGE, formatTicketDateTime } from "@/lib/tickets";
 import { getInitials } from "@/lib/utils";
 import { SidebarCard } from "./sidebar-card";
+import { TicketTags } from "./ticket-tags";
 
 type Agent = { id: string; name: string | null; email: string };
 
@@ -42,6 +43,7 @@ interface Props {
   isAdmin?: boolean;
   priorities: TicketPriority[];
   statuses: TicketStatus[];
+  tags: Array<{ id: string; name: string }>;
   ticket: {
     id: string;
     ticketNumber: number;
@@ -65,6 +67,7 @@ export function TicketInfoSidebar({
   statuses,
   categories,
   priorities,
+  tags,
   currentUserId,
   isAdmin = false,
 }: Props) {
@@ -99,8 +102,23 @@ export function TicketInfoSidebar({
       const m = a.metadata as { filename?: string } | null;
       return `Attachment deleted${m?.filename ? `: ${m.filename}` : ""}`;
     },
+    tag_added: (a) => {
+      const m = a.metadata as { tag?: string } | null;
+      return `Tag added${m?.tag ? `: ${m.tag}` : ""}`;
+    },
+    tag_removed: (a) => {
+      const m = a.metadata as { tag?: string } | null;
+      return `Tag removed${m?.tag ? `: ${m.tag}` : ""}`;
+    },
   };
   const router = useRouter();
+
+  // Accordion: only one sidebar section open at a time. `null` = all closed.
+  const [openSection, setOpenSection] = useState<string | null>("ticket-info");
+  const accordionProps = (key: string) => ({
+    open: openSection === key,
+    onOpenChange: (o: boolean) => setOpenSection(o ? key : null),
+  });
 
   const [status, setStatus] = useState(ticket.status);
   const [category, setCategory] = useState(ticket.category);
@@ -240,7 +258,11 @@ export function TicketInfoSidebar({
   return (
     <aside className="space-y-5">
       {/* Ticket Info */}
-      <SidebarCard contentClassName="space-y-4" title="Ticket Info">
+      <SidebarCard
+        contentClassName="space-y-4"
+        title="Ticket Info"
+        {...accordionProps("ticket-info")}
+      >
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Number</span>
@@ -341,8 +363,13 @@ export function TicketInfoSidebar({
         {error && <p className="text-xs text-red-600">{error}</p>}
       </SidebarCard>
 
+      {/* Tags */}
+      <SidebarCard title="Tags" {...accordionProps("tags")}>
+        <TicketTags initialTags={tags} ticketId={ticket.id} />
+      </SidebarCard>
+
       {/* Customer Info */}
-      <SidebarCard defaultOpen={false} title="Customer">
+      <SidebarCard title="Customer" {...accordionProps("customer")}>
         <div className="flex items-start gap-2.5">
           <div className="size-7 rounded-full bg-accent border border-border flex items-center justify-center text-xs font-medium text-foreground shrink-0">
             {getInitials(ticket.customerName)}
@@ -361,8 +388,8 @@ export function TicketInfoSidebar({
       {/* Assigned Agent */}
       <SidebarCard
         contentClassName="space-y-3"
-        defaultOpen={false}
         title="Assigned Agent"
+        {...accordionProps("assigned-agent")}
       >
         <SearchableSelect
           disabled={loading}
@@ -391,9 +418,9 @@ export function TicketInfoSidebar({
 
       {/* Activity */}
       <SidebarCard
-        defaultOpen={false}
         icon={<ClockIcon className="size-3.5" />}
         title="Activity"
+        {...accordionProps("activity")}
       >
         <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
           {activity.map((a) => {
@@ -417,9 +444,9 @@ export function TicketInfoSidebar({
       {isAdmin && (
         <SidebarCard
           className="border-red-200"
-          defaultOpen={false}
           title="Danger Zone"
           titleClassName="text-red-600"
+          {...accordionProps("danger-zone")}
         >
           <Button
             className="w-full border-red-200 text-red-600 hover:bg-red-50 text-xs flex items-center gap-1.5"

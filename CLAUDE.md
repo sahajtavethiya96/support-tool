@@ -24,7 +24,7 @@ Full feature specs live in `docs/`. Read the relevant doc before implementing an
 | State | SWR (server) — no Zustand needed |
 | Background Jobs | pg-boss |
 | Email | Nodemailer (SMTP) via pg-boss queue + react-email templates |
-| File Storage | files-sdk (local `fs` adapter in dev → S3/R2/GCS in prod) |
+| File Storage | `lib/storage.ts` — `local` (default, needs a Docker volume) / `s3` / `r2` via `STORAGE_DRIVER` |
 
 ---
 
@@ -51,7 +51,7 @@ lib/
 ├── auth.ts                ← Better Auth server instance
 ├── auth-client.ts         ← Better Auth client
 ├── db.ts                  ← Drizzle client singleton
-├── storage.ts             ← files-sdk adapter (local → S3/R2/GCS)
+├── storage.ts             ← storage adapter (local / s3 / r2 via STORAGE_DRIVER)
 ├── email/                 ← email templates + enqueue helper
 ├── worker/                ← pg-boss queue handlers
 └── utils.ts               ← shared utilities
@@ -167,9 +167,25 @@ Ticket **descriptions** (submit form) and **replies** (both customer and agent) 
 
 ### File Storage
 
-- File storage is via **files-sdk** (`lib/storage.ts`) — unified adapter layer.
-- **Local dev:** `fs` adapter stores files in `./uploads/` and serves them via `/api/files/[...key]`.
-- **Production:** swap to S3/R2/GCS by setting `STORAGE_DRIVER` env var — no app code changes.
+- File storage is via the driver-switched adapter in `lib/storage.ts`,
+  selected by `STORAGE_DRIVER`: `local` (default, local disk), `s3`, or `r2`
+  (both via [files-sdk](https://files-sdk.dev), dynamically imported only
+  when selected). See `docs/file-uploads.md` for required env vars per
+  driver — validated at boot in `lib/env.ts`, not on first upload.
+- **`storage.url(key)` always returns `/api/files/{key}`, regardless of
+  driver** — never a direct/signed cloud URL. Deliberate: keeps it
+  synchronous (callers build it inline in `.map()`, not awaited per
+  attachment) and keeps ticket-attachment access control in Support
+  Tool's own route. `/api/files/[...key]` calls `storage.download()`,
+  which works identically for every driver.
+- **`local` driver in Docker:** `./uploads` MUST be a persistent volume or
+  every redeploy wipes all files (container filesystem resets from the
+  image each time). The compose files pin it to a literal volume name
+  (`support_tool_uploads`), not Compose's default project-derived name —
+  some deploy tools (observed with Dokploy) don't keep the compose project
+  name stable across redeploys, which silently creates a new empty volume
+  and orphans the old one. Cloud drivers (`s3`/`r2`) don't need a volume
+  at all. See `docs/file-uploads.md`.
 - DB stores the **storage key** (e.g. `tickets/{ticketId}/{uuid}/{filename}`) — never a full URL.
 - Always delete the storage file before deleting the DB record.
 - Generate serving URLs on demand via `storage.url(key)` — never persist URLs.

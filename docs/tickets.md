@@ -80,6 +80,19 @@ open ──────────────────► in_progress ─�
 
 ---
 
+## Tags
+
+Tags are **freeform** — any agent can type a new tag on a ticket; it's created in a shared pool (`tags` table) on first use and then autocompleted for everyone (unlike Statuses/Categories/Priorities, there is no admin management screen). A ticket can have any number of tags, via the `ticket_tags` join table (many-to-many).
+
+- Tag names are normalized (trimmed, collapsed whitespace, lowercased) so `"Billing"` and `"billing "` share one row.
+- Managed from the ticket detail page's "Tags" sidebar card — add via the "+ Add tag" popover (search existing or create new), remove via the `×` on a tag chip.
+- `POST /api/tickets/{id}/tags` (body `{ name }`) and `DELETE /api/tickets/{id}/tags/{tagId}` — both agent/admin only.
+- `GET /api/tags?q=…` — autocomplete search across the shared pool.
+- Adding/removing a tag logs a `tag_added`/`tag_removed` row in `ticket_activity`.
+- Not currently filterable on the ticket list page (detail-page-only for now).
+
+---
+
 ## Ticket Number
 
 - `ticket_number` is a PostgreSQL `serial` (auto-increment integer).
@@ -149,6 +162,8 @@ Every significant action on a ticket is logged in `ticket_activity` for a full a
 | `ticket_closed` | Ticket was closed |
 | `ticket_reopened` | Ticket was reopened |
 | `attachment_added` | File attached |
+| `tag_added` | Tag added to the ticket |
+| `tag_removed` | Tag removed from the ticket |
 
 ```
 ticket_activity

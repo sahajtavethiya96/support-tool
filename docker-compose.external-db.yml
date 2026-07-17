@@ -66,4 +66,10 @@ services:
     restart: unless-stopped
 
 volumes:
+  # Pinned to a literal name — see docker-compose.yml for why (Compose's
+  # default volume namespacing can drift across redeploys under some deploy
+  # tools, silently orphaning old uploads). Same literal name as
+  # docker-compose.yml so switching between bundled/external Postgres keeps
+  # the same uploads.
   uploads:
+    name: support_tool_uploads

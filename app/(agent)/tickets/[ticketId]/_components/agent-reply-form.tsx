@@ -1,14 +1,13 @@
 "use client";
 
 import {
-  ArrowUpIcon,
-  ChatCircleIcon,
   LockSimpleIcon,
   PaperclipIcon,
+  PaperPlaneTiltIcon,
   XIcon,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   RichTextEditor,
@@ -49,13 +48,26 @@ export function AgentReplyForm({
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [composing, setComposing] = useState(false);
 
   const maxNewFiles = Math.max(0, 5 - totalAttachments);
-  // Keep the Reply/Internal Note toggle visible while actively composing —
-  // collapse it back to a single-line input only once fully idle and empty.
-  const showComposeControls =
-    composing || isInternal || files.length > 0 || !isRichTextEmpty(content);
+
+  // Object URLs for image thumbnails in the compose box — created when the
+  // file list changes and revoked on cleanup so they never leak.
+  const [previews, setPreviews] = useState<Map<File, string>>(new Map());
+  useEffect(() => {
+    const map = new Map<File, string>();
+    for (const f of files) {
+      if (f.type.startsWith("image/")) {
+        map.set(f, URL.createObjectURL(f));
+      }
+    }
+    setPreviews(map);
+    return () => {
+      for (const url of map.values()) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [files]);
 
   function addFiles(newFiles: File[]) {
     const combined = [...files, ...newFiles];
@@ -138,130 +150,138 @@ export function AgentReplyForm({
   }
 
   return (
-    <form className="space-y-3" onSubmit={handleSubmit} ref={formRef}>
-      {/* Toggle: Reply / Internal Note — hidden while idle, shown while composing */}
-      {showComposeControls && (
-        <div className="flex gap-1 p-1 bg-accent rounded-lg border border-border w-fit">
-          <button
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              isInternal
-                ? "text-muted-foreground hover:text-foreground"
-                : "bg-card text-foreground shadow-sm border border-border"
-            }`}
-            onClick={() => setIsInternal(false)}
-            onMouseDown={(e) => e.preventDefault()}
-            type="button"
-          >
-            <ChatCircleIcon className="size-3.5" />
-            Reply to Customer
-          </button>
-          <button
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              isInternal
-                ? "bg-amber-100 text-amber-800 shadow-sm border border-amber-200"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setIsInternal(true)}
-            onMouseDown={(e) => e.preventDefault()}
-            type="button"
-          >
-            <LockSimpleIcon className="size-3.5" />
-            Internal Note
-          </button>
-        </div>
-      )}
-
-      {files.length > 0 && (
-        <ul className="space-y-1">
-          {files.map((f, i) => (
-            <li
-              className="flex items-center gap-2 rounded-md bg-accent border border-border px-3 py-2 text-xs"
-              key={i}
-            >
-              <PaperclipIcon className="size-3.5 text-muted-foreground shrink-0" />
-              <span className="text-foreground truncate flex-1">{f.name}</span>
-              <span className="text-muted-foreground shrink-0">
-                {(f.size / 1024).toFixed(0)} KB
-              </span>
-              <button
-                className="text-muted-foreground hover:text-foreground"
-                onClick={() => removeFile(i)}
-                type="button"
-              >
-                <XIcon className="size-3.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
+    <form className="space-y-2" onSubmit={handleSubmit} ref={formRef}>
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      {/* Compose row — one unified pill (attach + input + send), WhatsApp-style */}
+      {/* Slack-style compose box: text input on top (with its own formatting
+          toolbar), a divided action bar at the bottom — attach + internal-note
+          toggle on the left, send on the right. */}
       <div
         className={cn(
-          "flex items-end gap-1 rounded-3xl border bg-card pl-1.5 pr-1.5 py-1.5 transition-colors",
+          "overflow-hidden rounded-xl border bg-card transition-[color,border-color,box-shadow] focus-within:ring-2",
           isInternal
-            ? "border-amber-200 focus-within:border-amber-400"
-            : "border-input focus-within:border-ring"
+            ? "border-amber-200 bg-amber-50 focus-within:border-amber-400 focus-within:ring-amber-400/20"
+            : "border-input focus-within:border-ring focus-within:ring-ring/20"
         )}
       >
-        <label
-          className={cn(
-            "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors",
-            maxNewFiles > 0 && !submitting
-              ? "text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
-              : "text-muted-foreground/40 cursor-not-allowed"
-          )}
-          title={maxNewFiles > 0 ? "Attach file" : "Attachment limit reached"}
-        >
-          <PaperclipIcon className="size-4" />
-          <input
-            accept=".jpg,.jpeg,.png,.pdf,.zip,.txt"
-            className="hidden"
-            disabled={submitting || maxNewFiles === 0}
-            multiple
-            onChange={handleFileChange}
-            ref={fileInputRef}
-            type="file"
-          />
-        </label>
-
-        <div className="flex-1 min-w-0">
-          <RichTextEditor
-            cannedResponses={cannedResponses}
-            className="rounded-none border-0 bg-transparent focus-within:ring-0"
-            compact
-            disabled={submitting}
-            onBlur={() => setComposing(false)}
-            onChange={setContent}
-            onFilesDropped={maxNewFiles > 0 ? addFiles : undefined}
-            onFocus={() => setComposing(true)}
-            onSubmit={handleEnterSubmit}
-            placeholder={
-              isInternal
-                ? "Write an internal note (only visible to agents)…"
-                : "Write a reply to the customer…"
-            }
-            ref={editorRef}
-            tone={isInternal ? "warning" : "default"}
-            value={content}
-          />
-        </div>
-
-        <Button
-          className={cn(
-            "size-9 shrink-0 rounded-full p-0",
+        <RichTextEditor
+          cannedResponses={cannedResponses}
+          className="rounded-none border-0 bg-transparent focus-within:ring-0"
+          compact
+          disabled={submitting}
+          onChange={setContent}
+          onFilesDropped={maxNewFiles > 0 ? addFiles : undefined}
+          onSubmit={handleEnterSubmit}
+          placeholder={
             isInternal
-              ? "bg-amber-600 hover:bg-amber-700 text-white"
-              : "bg-primary hover:bg-primary/90 text-primary-foreground"
-          )}
-          disabled={submitting || isRichTextEmpty(content)}
-          title={isInternal ? "Add Note" : "Send Reply"}
-          type="submit"
-        >
-          <ArrowUpIcon className="size-4" weight="bold" />
-        </Button>
+              ? "Write an internal note (only visible to agents)…"
+              : "Write a reply to the customer…"
+          }
+          ref={editorRef}
+          tone={isInternal ? "warning" : "default"}
+          value={content}
+        />
+
+        {/* Uploaded files — thumbnails inside the box (Slack-style): image
+            previews for images, a compact icon card for everything else. */}
+        {files.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-3 pb-2">
+            {files.map((f, i) => {
+              const preview = previews.get(f);
+              return (
+                <div
+                  className="group relative"
+                  key={`${f.name}-${f.size}-${f.lastModified}`}
+                >
+                  {preview ? (
+                    // biome-ignore lint/performance/noImgElement: local object-URL preview of a not-yet-uploaded file, not a remote asset
+                    <img
+                      alt={f.name}
+                      className="size-16 rounded-lg border border-border object-cover"
+                      src={preview}
+                    />
+                  ) : (
+                    <div className="flex size-16 flex-col items-center justify-center gap-1 rounded-lg border border-border bg-accent px-1.5 text-center">
+                      <PaperclipIcon className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="w-full truncate text-2xs text-muted-foreground">
+                        {f.name}
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    aria-label={`Remove ${f.name}`}
+                    className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-foreground text-background shadow-sm transition-transform hover:scale-110"
+                    onClick={() => removeFile(i)}
+                    type="button"
+                  >
+                    <XIcon className="size-3" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Bottom action bar */}
+        <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+          <div className="flex items-center gap-0.5">
+            {/* Attach */}
+            <label
+              className={cn(
+                "flex size-8 items-center justify-center rounded-md transition-colors",
+                maxNewFiles > 0 && !submitting
+                  ? "text-foreground hover:bg-accent cursor-pointer"
+                  : "text-muted-foreground/40 cursor-not-allowed"
+              )}
+              title={
+                maxNewFiles > 0 ? "Attach file" : "Attachment limit reached"
+              }
+            >
+              <PaperclipIcon className="size-4" />
+              <input
+                accept=".jpg,.jpeg,.png,.pdf,.zip,.txt"
+                className="hidden"
+                disabled={submitting || maxNewFiles === 0}
+                multiple
+                onChange={handleFileChange}
+                ref={fileInputRef}
+                type="file"
+              />
+            </label>
+
+            {/* Internal-note toggle */}
+            <button
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                isInternal
+                  ? "bg-amber-100 text-amber-800"
+                  : "text-foreground hover:bg-accent"
+              )}
+              onClick={() => setIsInternal((v) => !v)}
+              onMouseDown={(e) => e.preventDefault()}
+              title="Toggle internal note — only visible to agents"
+              type="button"
+            >
+              <LockSimpleIcon className="size-3.5" />
+              Internal note
+            </button>
+          </div>
+
+          {/* Send */}
+          <Button
+            className={cn(
+              "size-8 shrink-0 rounded-lg p-0",
+              isInternal
+                ? "bg-amber-600 hover:bg-amber-700 text-white"
+                : "bg-primary hover:bg-primary/90 text-primary-foreground"
+            )}
+            disabled={submitting || isRichTextEmpty(content)}
+            title={isInternal ? "Add note" : "Send reply"}
+            type="submit"
+          >
+            <PaperPlaneTiltIcon className="size-4" weight="fill" />
+          </Button>
+        </div>
       </div>
     </form>
   );

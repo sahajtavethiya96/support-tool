@@ -10,3 +10,4 @@ export * from "@/db/schema/ticket-config";
 export * from "@/db/schema/notifications";
 export * from "@/db/schema/rate-limit";
 export * from "@/db/schema/canned-responses";
+export * from "@/db/schema/tags";
