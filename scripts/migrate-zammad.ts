@@ -41,6 +41,10 @@
  *   MIGRATION_ZAMMAD_SEARCH     Zammad search query to restrict the export
  *                               (e.g. 'tags:DTM') — omit to export ALL tickets
  *   MIGRATION_PER_PAGE          page size when listing Zammad tickets (default 100)
+ *   MIGRATION_LIMIT             stop after seeing this many Zammad tickets
+ *                               (oldest-first, since listing is sorted created_at
+ *                               asc) — e.g. 100 to migrate just the first batch.
+ *                               Omit for no limit.
  *   MIGRATION_DRY_RUN           "1" → read + log only, write nothing
  */
 
@@ -82,6 +86,9 @@ const ZAMMAD_API_TOKEN = process.env.ZAMMAD_API_TOKEN ?? "";
 const DEFAULT_CATEGORY = process.env.MIGRATION_DEFAULT_CATEGORY ?? "issue";
 const ZAMMAD_SEARCH = process.env.MIGRATION_ZAMMAD_SEARCH ?? "";
 const PER_PAGE = Number(process.env.MIGRATION_PER_PAGE ?? "100") || 100;
+const LIMIT = process.env.MIGRATION_LIMIT
+  ? Number(process.env.MIGRATION_LIMIT)
+  : null;
 const DRY_RUN = process.env.MIGRATION_DRY_RUN === "1";
 
 const CHECKPOINT_FILE = path.join(
@@ -708,8 +715,13 @@ async function main() {
   );
   console.log(`  source:   ${ZAMMAD_BASE_URL}`);
   console.log(
-    `  filter:   ${ZAMMAD_SEARCH ? `search "${ZAMMAD_SEARCH}"` : "ALL tickets"}\n`
+    `  filter:   ${ZAMMAD_SEARCH ? `search "${ZAMMAD_SEARCH}"` : "ALL tickets"}`
   );
+  if (LIMIT != null) {
+    console.log(`  limit:    first ${LIMIT} ticket(s) seen (oldest-first)\n`);
+  } else {
+    console.log("");
+  }
 
   // Resolve this app's config → the slugs we'll map Zammad values onto.
   const [statuses, priorities, categories, defaultStatus, defaultPriority] =
@@ -758,6 +770,9 @@ async function main() {
   let totalTags = 0;
 
   for await (const zTicket of iterateZammadTickets()) {
+    if (LIMIT != null && seen >= LIMIT) {
+      break;
+    }
     seen += 1;
     const zid = String(zTicket.id);
     if (alreadyMigrated.has(zid)) {
@@ -843,6 +858,7 @@ main()
  *
  *    Optional: only DTM tickets →  -e MIGRATION_ZAMMAD_SEARCH="tags:DTM"
  *              different category →  -e MIGRATION_DEFAULT_CATEGORY="general_query"
+ *              first 100 tickets only →  -e MIGRATION_LIMIT=100
  *
  * Not using Docker (host / dev, with the app's .env present and uploads/ here):
  *    ZAMMAD_BASE_URL=... ZAMMAD_API_TOKEN=... pnpm migrate:zammad
