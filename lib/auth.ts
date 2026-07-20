@@ -4,7 +4,6 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { admin } from "better-auth/plugins/admin";
 import { magicLink } from "better-auth/plugins/magic-link";
-import { PRODUCT_NAME } from "@/config/platform";
 import * as schema from "@/db/schema";
 import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
@@ -12,7 +11,7 @@ import { enqueueEmail } from "@/lib/email";
 import { magicLinkTemplate } from "@/lib/email/templates/magic-link";
 import { resetPasswordTemplate } from "@/lib/email/templates/reset-password";
 import { env } from "@/lib/env";
-import { getPlatformSettings } from "@/lib/settings";
+import { getEmailBranding, getPlatformSettings } from "@/lib/settings";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -38,9 +37,10 @@ export const auth = betterAuth({
         resetUrl: url,
       });
 
+      const { productName } = await getEmailBranding();
       await enqueueEmail({
         to: user.email,
-        subject: `Reset your ${PRODUCT_NAME} password`,
+        subject: `Reset your ${productName} password`,
         html,
         text,
       });
@@ -76,9 +76,10 @@ export const auth = betterAuth({
           magicLinkUrl: url,
         });
 
+        const { productName } = await getEmailBranding();
         await enqueueEmail({
           to: email,
-          subject: `Sign in to ${PRODUCT_NAME}`,
+          subject: `Sign in to ${productName}`,
           html,
           text,
         });

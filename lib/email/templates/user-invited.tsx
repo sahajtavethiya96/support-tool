@@ -3,18 +3,23 @@ export async function userInvitedTemplate(props: {
   role: string;
   signInUrl: string;
   appName: string;
+  logoUrl?: string | null;
   /** When set (password login is enabled), the primary CTA sets up a
    * password instead of linking straight to /login — a fresh invite has no
    * credential account yet, so a bare sign-in link would leave the invitee
    * with no way in unless another method (magic link/Google) is enabled. */
   passwordSetupUrl?: string;
 }) {
-  const { inviteeName, role, signInUrl, appName, passwordSetupUrl } = props;
+  const { inviteeName, role, signInUrl, appName, logoUrl, passwordSetupUrl } =
+    props;
   const roleLabel = role === "admin" ? "Admin" : "Agent";
   const ctaUrl = passwordSetupUrl ?? signInUrl;
   const ctaLabel = passwordSetupUrl
     ? "Set Your Password"
     : `Sign In to ${appName}`;
+  const headerMark = logoUrl
+    ? `<img src="${logoUrl}" alt="${appName}" height="28" style="display:block;" />`
+    : `<p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;">${appName}</p>`;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -31,7 +36,7 @@ export async function userInvitedTemplate(props: {
           <!-- Header -->
           <tr>
             <td style="background:#384959;padding:32px 40px;">
-              <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;">${appName}</p>
+              ${headerMark}
             </td>
           </tr>
           <!-- Body -->

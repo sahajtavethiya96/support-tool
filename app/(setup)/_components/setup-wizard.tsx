@@ -57,6 +57,7 @@ function WizardInner() {
   const { currentTheme, appearanceMode, setTheme, setAppearance } = useTheme();
 
   const [step, setStep] = React.useState(0);
+  const [brandName, setBrandName] = React.useState("");
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -100,6 +101,7 @@ function WizardInner() {
           password,
           theme: currentTheme,
           appearanceMode,
+          brandName: brandName.trim() || undefined,
         }),
       });
 
@@ -177,9 +179,11 @@ function WizardInner() {
         {step === 0 && (
           <WelcomeStep
             appearanceMode={appearanceMode}
+            brandName={brandName}
             currentTheme={currentTheme}
             onNext={() => setStep(1)}
             setAppearance={setAppearance}
+            setBrandName={setBrandName}
             setTheme={setTheme}
           />
         )}
@@ -341,14 +345,18 @@ function WizardInner() {
 function WelcomeStep({
   currentTheme,
   appearanceMode,
+  brandName,
   setTheme,
   setAppearance,
+  setBrandName,
   onNext,
 }: {
   currentTheme: string;
   appearanceMode: "light" | "dark" | "auto";
+  brandName: string;
   setTheme: (t: string) => void;
   setAppearance: (m: "light" | "dark" | "auto") => void;
+  setBrandName: (n: string) => void;
   onNext: () => void;
 }) {
   return (
@@ -363,6 +371,25 @@ function WelcomeStep({
         <p className="text-sm text-muted-foreground mt-1">
           Let&apos;s get your instance set up. Pick a look — you can change it
           later in Appearance settings.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="setup-brand-name">
+          Brand name{" "}
+          <span className="text-muted-foreground font-normal">
+            (optional)
+          </span>
+        </Label>
+        <Input
+          id="setup-brand-name"
+          onChange={(e) => setBrandName(e.target.value)}
+          placeholder={PRODUCT_NAME}
+          value={brandName}
+        />
+        <p className="text-xs text-muted-foreground">
+          Shown instead of "{PRODUCT_NAME}" in emails and across the app. You
+          can add a logo afterward from Appearance settings.
         </p>
       </div>
 

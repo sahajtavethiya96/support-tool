@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { Button, Hr, Link, Section, Text } from "react-email";
-import { PRODUCT_NAME } from "@/config/platform";
 import { EmailLayout, emailStyles } from "@/lib/email/components/layout";
 import { renderEmailTemplate } from "@/lib/email/renderer";
+import { getEmailBranding } from "@/lib/settings";
 
 const brand = "#384959";
 
@@ -13,6 +13,7 @@ function TicketCreatedEmail({
   ticketUrl,
   myTicketsUrl,
   productName,
+  logoUrl,
 }: {
   customerName: string;
   ticketNumber: number;
@@ -20,9 +21,11 @@ function TicketCreatedEmail({
   ticketUrl: string;
   myTicketsUrl: string;
   productName: string;
+  logoUrl: string | null;
 }) {
   return (
     <EmailLayout
+      logoUrl={logoUrl}
       preview={`[#${ticketNumber}] Your ticket has been received — ${ticketSubject}`}
       productName={productName}
     >
@@ -66,9 +69,9 @@ export async function ticketCreatedTemplate(props: {
   ticketUrl: string;
   myTicketsUrl: string;
 }) {
-  const productName = PRODUCT_NAME;
+  const { productName, logoUrl } = await getEmailBranding();
   const html = await renderEmailTemplate(
-    createElement(TicketCreatedEmail, { ...props, productName })
+    createElement(TicketCreatedEmail, { ...props, productName, logoUrl })
   );
 
   const text = `Hi ${props.customerName},

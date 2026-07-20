@@ -19,6 +19,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface SetupBody {
   appearanceMode?: string;
+  brandName?: string;
   email?: string;
   name?: string;
   password?: string;
@@ -73,6 +74,7 @@ export async function POST(request: NextRequest) {
     body.appearanceMode && VALID_APPEARANCES.has(body.appearanceMode)
       ? body.appearanceMode
       : "auto";
+  const brandName = body.brandName?.trim().slice(0, 60) || null;
 
   try {
     await createAdminUser({ name, email, password });
@@ -95,6 +97,7 @@ export async function POST(request: NextRequest) {
       id: "default",
       theme,
       appearanceMode,
+      brandName,
       // Password login is on so the admin we just created can sign in with the
       // credentials they entered — no SMTP/OAuth required for the first login.
       passwordLoginEnabled: true,
@@ -104,7 +107,7 @@ export async function POST(request: NextRequest) {
     })
     .onConflictDoUpdate({
       target: platformSettings.id,
-      set: { theme, appearanceMode, updatedAt: now },
+      set: { theme, appearanceMode, brandName, updatedAt: now },
     });
 
   return NextResponse.json({ ok: true });

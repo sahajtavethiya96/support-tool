@@ -1,10 +1,9 @@
 import { redirect } from "next/navigation";
 import { SetupWizard } from "@/app/(setup)/_components/setup-wizard";
-import { PRODUCT_NAME } from "@/config/platform";
 import { isSetupComplete } from "@/lib/setup";
 
 export const metadata = {
-  title: `Set up · ${PRODUCT_NAME}`,
+  title: "Set up",
 };
 
 // The setup check queries the database, which must happen per request — a

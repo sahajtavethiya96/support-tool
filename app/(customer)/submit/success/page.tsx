@@ -1,7 +1,12 @@
 import { CheckCircleIcon, TicketIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { BrandMark } from "@/components/common/brand-mark";
 import { Button } from "@/components/ui/button";
-import { PRODUCT_NAME } from "@/config/platform";
+import {
+  getPlatformSettings,
+  resolveBrandName,
+  resolveLogoUrl,
+} from "@/lib/settings";
 
 interface Props {
   searchParams: Promise<{ ticket?: string; email?: string }>;
@@ -9,6 +14,9 @@ interface Props {
 
 export default async function SubmitSuccessPage({ searchParams }: Props) {
   const { ticket, email } = await searchParams;
+  const settings = await getPlatformSettings();
+  const brandName = resolveBrandName(settings.brandName);
+  const logoUrl = resolveLogoUrl(settings.logoKey);
 
   return (
     <div className="min-h-screen bg-public">
@@ -16,12 +24,17 @@ export default async function SubmitSuccessPage({ searchParams }: Props) {
       <header className="bg-white/80 backdrop-blur-sm border-b border-sand sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 h-14 flex items-center justify-between">
           <Link className="flex items-center gap-2.5" href="/">
-            <div className="size-7 rounded-md bg-bark flex items-center justify-center">
-              <TicketIcon className="size-4 text-cream" weight="fill" />
-            </div>
-            <span className="font-semibold text-bark text-sm">
-              {PRODUCT_NAME}
-            </span>
+            <BrandMark
+              fallbackIcon={
+                <div className="size-7 rounded-md bg-bark flex items-center justify-center">
+                  <TicketIcon className="size-4 text-cream" weight="fill" />
+                </div>
+              }
+              imgClassName="h-7 w-auto max-w-40 object-contain"
+              logoUrl={logoUrl}
+              name={brandName}
+              textClassName="font-semibold text-bark text-sm"
+            />
           </Link>
         </div>
       </header>

@@ -6,10 +6,10 @@ import {
 import { and, asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BrandMark } from "@/components/common/brand-mark";
 import { LocalDateTime } from "@/components/common/local-datetime";
 import { RichTextContent } from "@/components/common/rich-text-content";
 import { TicketAttachments } from "@/components/common/ticket-attachments";
-import { PRODUCT_NAME } from "@/config/platform";
 import {
   ticketActivity,
   ticketAttachments,
@@ -19,6 +19,11 @@ import {
 import { signEmailToken } from "@/lib/customer-access";
 import { db } from "@/lib/db";
 import { isRichTextEmpty } from "@/lib/rich-text";
+import {
+  getPlatformSettings,
+  resolveBrandName,
+  resolveLogoUrl,
+} from "@/lib/settings";
 import { storage } from "@/lib/storage";
 import { getTicketCategories, getTicketStatuses } from "@/lib/ticket-config";
 import { COLOR_BADGE } from "@/lib/tickets";
@@ -54,10 +59,13 @@ export default async function TicketDetailPage({
     notFound();
   }
 
-  const [statuses, categories] = await Promise.all([
+  const [statuses, categories, settings] = await Promise.all([
     getTicketStatuses(),
     getTicketCategories(),
+    getPlatformSettings(),
   ]);
+  const brandName = resolveBrandName(settings.brandName);
+  const logoUrl = resolveLogoUrl(settings.logoKey);
 
   const statusMap = Object.fromEntries(statuses.map((s) => [s.slug, s]));
   const categoryMap = Object.fromEntries(categories.map((c) => [c.slug, c]));
@@ -140,12 +148,17 @@ export default async function TicketDetailPage({
       <header className="bg-white/80 backdrop-blur-sm border-b border-sand sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
           <Link className="flex items-center gap-2 sm:gap-2.5 min-w-0" href="/">
-            <div className="size-7 rounded-md bg-bark flex items-center justify-center shrink-0">
-              <TicketIcon className="size-4 text-cream" weight="fill" />
-            </div>
-            <span className="font-semibold text-bark text-sm truncate">
-              {PRODUCT_NAME}
-            </span>
+            <BrandMark
+              fallbackIcon={
+                <div className="size-7 rounded-md bg-bark flex items-center justify-center shrink-0">
+                  <TicketIcon className="size-4 text-cream" weight="fill" />
+                </div>
+              }
+              imgClassName="h-7 w-auto max-w-40 object-contain"
+              logoUrl={logoUrl}
+              name={brandName}
+              textClassName="font-semibold text-bark text-sm truncate"
+            />
           </Link>
           <nav className="flex gap-3 sm:gap-4 text-sm shrink-0">
             <Link

@@ -2,11 +2,16 @@ import { CaretRightIcon, TicketIcon } from "@phosphor-icons/react/dist/ssr";
 import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BrandMark } from "@/components/common/brand-mark";
 import { LocalDateTime } from "@/components/common/local-datetime";
-import { PRODUCT_NAME } from "@/config/platform";
 import { tickets } from "@/db/schema";
 import { verifyEmailToken } from "@/lib/customer-access";
 import { db } from "@/lib/db";
+import {
+  getPlatformSettings,
+  resolveBrandName,
+  resolveLogoUrl,
+} from "@/lib/settings";
 import { getTicketCategories, getTicketStatuses } from "@/lib/ticket-config";
 import { COLOR_BADGE } from "@/lib/tickets";
 
@@ -22,7 +27,7 @@ export default async function MyTicketsListPage({ params }: Props) {
     notFound();
   }
 
-  const [rows, statuses, categories] = await Promise.all([
+  const [rows, statuses, categories, settings] = await Promise.all([
     db
       .select({
         id: tickets.id,
@@ -38,7 +43,10 @@ export default async function MyTicketsListPage({ params }: Props) {
       .orderBy(desc(tickets.createdAt)),
     getTicketStatuses(),
     getTicketCategories(),
+    getPlatformSettings(),
   ]);
+  const brandName = resolveBrandName(settings.brandName);
+  const logoUrl = resolveLogoUrl(settings.logoKey);
 
   const statusMap = Object.fromEntries(statuses.map((s) => [s.slug, s]));
   const categoryMap = Object.fromEntries(categories.map((c) => [c.slug, c]));
@@ -56,12 +64,17 @@ export default async function MyTicketsListPage({ params }: Props) {
       <header className="bg-white/80 backdrop-blur-sm border-b border-sand sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
           <Link className="flex items-center gap-2 sm:gap-2.5 min-w-0" href="/">
-            <div className="size-7 rounded-md bg-bark flex items-center justify-center shrink-0">
-              <TicketIcon className="size-4 text-cream" weight="fill" />
-            </div>
-            <span className="font-semibold text-bark text-sm truncate">
-              {PRODUCT_NAME}
-            </span>
+            <BrandMark
+              fallbackIcon={
+                <div className="size-7 rounded-md bg-bark flex items-center justify-center shrink-0">
+                  <TicketIcon className="size-4 text-cream" weight="fill" />
+                </div>
+              }
+              imgClassName="h-7 w-auto max-w-40 object-contain"
+              logoUrl={logoUrl}
+              name={brandName}
+              textClassName="font-semibold text-bark text-sm truncate"
+            />
           </Link>
           <nav className="flex gap-4 text-sm shrink-0">
             <Link

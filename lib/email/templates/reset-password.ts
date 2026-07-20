@@ -1,7 +1,7 @@
 import { createElement } from "react";
-import { PRODUCT_NAME } from "@/config/platform";
 import { ResetPasswordEmail } from "@/lib/email/components/reset-password";
 import { renderEmailTemplate } from "@/lib/email/renderer";
+import { getEmailBranding } from "@/lib/settings";
 
 export async function resetPasswordTemplate({
   email,
@@ -10,15 +10,17 @@ export async function resetPasswordTemplate({
   email: string;
   resetUrl: string;
 }) {
+  const { productName, logoUrl } = await getEmailBranding();
   const html = await renderEmailTemplate(
     createElement(ResetPasswordEmail, {
       email,
       resetUrl,
-      productName: PRODUCT_NAME,
+      productName,
+      logoUrl,
     })
   );
 
-  const text = `Set your ${PRODUCT_NAME} password
+  const text = `Set your ${productName} password
 
 Use this link to set a password for ${email}:
 ${resetUrl}

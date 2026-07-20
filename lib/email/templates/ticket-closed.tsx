@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { Button, Hr, Link, Section, Text } from "react-email";
-import { PRODUCT_NAME } from "@/config/platform";
 import { EmailLayout, emailStyles } from "@/lib/email/components/layout";
 import { renderEmailTemplate } from "@/lib/email/renderer";
+import { getEmailBranding } from "@/lib/settings";
 
 const brand = "#384959";
 
@@ -12,15 +12,18 @@ function TicketClosedEmail({
   ticketSubject,
   ticketUrl,
   productName,
+  logoUrl,
 }: {
   customerName: string;
   ticketNumber: number;
   ticketSubject: string;
   ticketUrl: string;
   productName: string;
+  logoUrl: string | null;
 }) {
   return (
     <EmailLayout
+      logoUrl={logoUrl}
       preview={`[#${ticketNumber}] Your ticket has been closed — ${ticketSubject}`}
       productName={productName}
     >
@@ -59,9 +62,9 @@ export async function ticketClosedTemplate(props: {
   ticketSubject: string;
   ticketUrl: string;
 }) {
-  const productName = PRODUCT_NAME;
+  const { productName, logoUrl } = await getEmailBranding();
   const html = await renderEmailTemplate(
-    createElement(TicketClosedEmail, { ...props, productName })
+    createElement(TicketClosedEmail, { ...props, productName, logoUrl })
   );
 
   const text = `Hi ${props.customerName},

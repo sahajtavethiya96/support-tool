@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { Button, Hr, Link, Section, Text } from "react-email";
-import { PRODUCT_NAME } from "@/config/platform";
 import { EmailLayout, emailStyles } from "@/lib/email/components/layout";
 import { renderEmailTemplate } from "@/lib/email/renderer";
+import { getEmailBranding } from "@/lib/settings";
 
 const brand = "#384959";
 
@@ -14,6 +14,7 @@ function TicketRepliedEmail({
   ticketUrl,
   agentName,
   productName,
+  logoUrl,
 }: {
   customerName: string;
   ticketNumber: number;
@@ -22,11 +23,13 @@ function TicketRepliedEmail({
   ticketUrl: string;
   agentName: string;
   productName: string;
+  logoUrl: string | null;
 }) {
   const truncated = replyPreview.length === 500;
 
   return (
     <EmailLayout
+      logoUrl={logoUrl}
       preview={`[#${ticketNumber}] New reply on your ticket — ${ticketSubject}`}
       productName={productName}
     >
@@ -87,7 +90,7 @@ export async function ticketRepliedTemplate(props: {
   ticketUrl: string;
   agentName: string;
 }) {
-  const productName = PRODUCT_NAME;
+  const { productName, logoUrl } = await getEmailBranding();
   const replyPreview = props.replyContent.slice(0, 500);
 
   const html = await renderEmailTemplate(
@@ -99,6 +102,7 @@ export async function ticketRepliedTemplate(props: {
       ticketUrl: props.ticketUrl,
       agentName: props.agentName,
       productName,
+      logoUrl,
     })
   );
 

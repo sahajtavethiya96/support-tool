@@ -1,11 +1,14 @@
 import { redirect } from "next/navigation";
 import { ForgotPasswordForm } from "@/app/(auth)/_components/forgot-password-form";
-import { PRODUCT_NAME } from "@/config/platform";
 import { getCurrentSession } from "@/lib/authz";
-import { getPlatformSettings } from "@/lib/settings";
+import {
+  getPlatformSettings,
+  resolveBrandName,
+  resolveLogoUrl,
+} from "@/lib/settings";
 
 export const metadata = {
-  title: `Forgot password · ${PRODUCT_NAME}`,
+  title: "Forgot password",
 };
 
 // Reads admin-toggleable settings from the database — per request only, never
@@ -24,5 +27,10 @@ export default async function ForgotPasswordPage() {
     redirect("/login");
   }
 
-  return <ForgotPasswordForm />;
+  return (
+    <ForgotPasswordForm
+      brandName={resolveBrandName(settings.brandName)}
+      logoUrl={resolveLogoUrl(settings.logoKey)}
+    />
+  );
 }

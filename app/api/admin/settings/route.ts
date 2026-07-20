@@ -17,6 +17,7 @@ const VALID_APPEARANCES = new Set(["light", "dark", "auto"]);
 
 interface SettingsBody {
   appearanceMode?: string;
+  brandName?: string | null;
   googleLoginEnabled?: boolean;
   magicLinkEnabled?: boolean;
   passwordLoginEnabled?: boolean;
@@ -37,6 +38,8 @@ export async function GET(_request: NextRequest) {
     passwordLoginEnabled: row?.passwordLoginEnabled ?? true,
     magicLinkEnabled: row?.magicLinkEnabled ?? false,
     googleLoginEnabled: row?.googleLoginEnabled ?? false,
+    brandName: row?.brandName ?? null,
+    logoKey: row?.logoKey ?? null,
   });
 }
 
@@ -71,6 +74,10 @@ export async function PATCH(request: NextRequest) {
     body.magicLinkEnabled ?? existing?.magicLinkEnabled ?? false;
   const googleLoginEnabled =
     body.googleLoginEnabled ?? existing?.googleLoginEnabled ?? false;
+  const brandName =
+    body.brandName === undefined
+      ? (existing?.brandName ?? null)
+      : (body.brandName?.trim() ?? "") || null;
 
   if (body.theme !== undefined && !VALID_THEMES.has(theme)) {
     return NextResponse.json({ error: "Invalid theme." }, { status: 400 });
@@ -90,6 +97,12 @@ export async function PATCH(request: NextRequest) {
       { status: 400 }
     );
   }
+  if (brandName !== null && brandName.length > 60) {
+    return NextResponse.json(
+      { error: "Brand name must be 60 characters or fewer." },
+      { status: 400 }
+    );
+  }
 
   const now = new Date();
 
@@ -102,6 +115,7 @@ export async function PATCH(request: NextRequest) {
       passwordLoginEnabled,
       magicLinkEnabled,
       googleLoginEnabled,
+      brandName,
       updatedAt: now,
     })
     .onConflictDoUpdate({
@@ -112,6 +126,7 @@ export async function PATCH(request: NextRequest) {
         passwordLoginEnabled,
         magicLinkEnabled,
         googleLoginEnabled,
+        brandName,
         updatedAt: now,
       },
     });
@@ -122,5 +137,6 @@ export async function PATCH(request: NextRequest) {
     passwordLoginEnabled,
     magicLinkEnabled,
     googleLoginEnabled,
+    brandName,
   });
 }

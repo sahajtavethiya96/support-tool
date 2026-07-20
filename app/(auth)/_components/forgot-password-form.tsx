@@ -2,12 +2,18 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { BrandMark } from "@/components/common/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PRODUCT_NAME } from "@/config/platform";
 import { authClient } from "@/lib/auth-client";
+import { getInitials } from "@/lib/utils";
 
-export function ForgotPasswordForm() {
+interface Props {
+  brandName: string;
+  logoUrl: string | null;
+}
+
+export function ForgotPasswordForm({ brandName, logoUrl }: Props) {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
@@ -35,10 +41,17 @@ export function ForgotPasswordForm() {
     <main className="min-h-screen bg-public flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center size-12 rounded-xl bg-bark text-cream font-bold text-lg mb-4">
-            ST
-          </div>
-          <h1 className="text-2xl font-semibold text-bark">{PRODUCT_NAME}</h1>
+          <BrandMark
+            fallbackIcon={
+              <div className="inline-flex items-center justify-center size-12 rounded-xl bg-bark text-cream font-bold text-lg mb-4">
+                {getInitials(brandName)}
+              </div>
+            }
+            imgClassName="h-10 w-auto max-w-56 object-contain mx-auto mb-4"
+            logoUrl={logoUrl}
+            name={brandName}
+            textClassName="text-2xl font-semibold text-bark block"
+          />
           <p className="text-sm text-stone mt-1">Agent &amp; Admin Portal</p>
         </div>
 

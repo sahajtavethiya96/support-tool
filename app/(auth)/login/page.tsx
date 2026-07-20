@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 import { AuthForm } from "@/app/(auth)/_components/auth-form";
-import { PRODUCT_NAME } from "@/config/platform";
 import { getCurrentSession } from "@/lib/authz";
-import { getPlatformSettings } from "@/lib/settings";
+import { getPlatformSettings, resolveBrandName, resolveLogoUrl } from "@/lib/settings";
 import { isSetupComplete } from "@/lib/setup";
 
 export const metadata = {
-  title: `Sign in · ${PRODUCT_NAME}`,
+  title: "Sign in",
 };
 
 // Setup state and enabled login methods come from the database and are
@@ -34,7 +33,9 @@ export default async function LoginPage() {
 
   return (
     <AuthForm
+      brandName={resolveBrandName(settings.brandName)}
       googleEnabled={googleConfigured && settings.googleLoginEnabled}
+      logoUrl={resolveLogoUrl(settings.logoKey)}
       magicLinkEnabled={settings.magicLinkEnabled}
       passwordLoginEnabled={settings.passwordLoginEnabled}
     />

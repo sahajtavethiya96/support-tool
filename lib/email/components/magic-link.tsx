@@ -6,13 +6,16 @@ export function MagicLinkEmail({
   email,
   magicLinkUrl,
   productName = PRODUCT_NAME,
+  logoUrl,
 }: {
   email: string;
   magicLinkUrl: string;
   productName?: string;
+  logoUrl?: string | null;
 }) {
   return (
     <EmailLayout
+      logoUrl={logoUrl}
       preview={`Sign in to ${productName}`}
       productName={productName}
     >

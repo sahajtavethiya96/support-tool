@@ -1,11 +1,17 @@
 import { LockIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { ThemeResetScript } from "@/components/theme/theme-reset-script";
-import { PRODUCT_NAME } from "@/config/platform";
+import { getPlatformSettings, resolveBrandName } from "@/lib/settings";
 
 export const metadata = { title: "Access Pending" };
 
-export default function UnauthorizedPage() {
+// Brand name is admin-configurable at runtime — read per request.
+export const dynamic = "force-dynamic";
+
+export default async function UnauthorizedPage() {
+  const settings = await getPlatformSettings();
+  const brandName = resolveBrandName(settings.brandName);
+
   return (
     <main className="min-h-screen bg-public flex items-center justify-center px-4">
       <ThemeResetScript />
@@ -16,7 +22,7 @@ export default function UnauthorizedPage() {
         <h1 className="text-lg font-semibold text-bark">Access Pending</h1>
         <p className="text-sm text-stone mt-2 leading-relaxed">
           Your account is awaiting role assignment. Ask an admin to grant you
-          Agent or Admin access in {PRODUCT_NAME}.
+          Agent or Admin access in {brandName}.
         </p>
         <Link
           className="mt-6 inline-block text-sm text-stone underline underline-offset-4 hover:text-bark transition-colors"

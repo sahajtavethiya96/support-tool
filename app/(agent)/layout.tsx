@@ -5,7 +5,11 @@ import { TopBar } from "@/components/agent/topbar";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { ThemeScript } from "@/components/theme/theme-script";
 import { requireAgent } from "@/lib/authz";
-import { getPlatformSettings } from "@/lib/settings";
+import {
+  getPlatformSettings,
+  resolveBrandName,
+  resolveLogoUrl,
+} from "@/lib/settings";
 
 export default async function AgentLayout({
   children,
@@ -31,6 +35,8 @@ export default async function AgentLayout({
         <PushInit userId={session.id} />
         <div className="fixed inset-0 flex overflow-hidden">
           <AgentSidebar
+            brandName={resolveBrandName(settings.brandName)}
+            logoUrl={resolveLogoUrl(settings.logoKey)}
             userEmail={session.email}
             userName={session.name ?? session.email}
             userRole={session.role ?? "agent"}

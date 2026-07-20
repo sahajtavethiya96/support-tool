@@ -11,10 +11,15 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { BrandMark } from "@/components/common/brand-mark";
 import { ThemeResetScript } from "@/components/theme/theme-reset-script";
 import { Button } from "@/components/ui/button";
-import { PRODUCT_NAME } from "@/config/platform";
 import { getCurrentSession } from "@/lib/authz";
+import {
+  getPlatformSettings,
+  resolveBrandName,
+  resolveLogoUrl,
+} from "@/lib/settings";
 import { isSetupComplete } from "@/lib/setup";
 
 // The setup check queries the database, which must happen per request — never
@@ -61,6 +66,10 @@ export default async function HomePage() {
     redirect("/tickets");
   }
 
+  const settings = await getPlatformSettings();
+  const brandName = resolveBrandName(settings.brandName);
+  const logoUrl = resolveLogoUrl(settings.logoKey);
+
   return (
     <div className="min-h-screen bg-public flex flex-col">
       <ThemeResetScript />
@@ -68,12 +77,17 @@ export default async function HomePage() {
       <header className="bg-white/80 backdrop-blur-sm border-b border-sand sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-            <div className="size-7 rounded-md bg-bark flex items-center justify-center shrink-0">
-              <TicketIcon className="size-4 text-cream" weight="fill" />
-            </div>
-            <span className="font-semibold text-bark text-sm truncate">
-              {PRODUCT_NAME}
-            </span>
+            <BrandMark
+              fallbackIcon={
+                <div className="size-7 rounded-md bg-bark flex items-center justify-center shrink-0">
+                  <TicketIcon className="size-4 text-cream" weight="fill" />
+                </div>
+              }
+              imgClassName="h-7 w-auto max-w-40 object-contain"
+              logoUrl={logoUrl}
+              name={brandName}
+              textClassName="font-semibold text-bark text-sm truncate"
+            />
           </div>
           <div className="flex items-center gap-3 sm:gap-4 shrink-0">
             <Link
@@ -214,7 +228,7 @@ export default async function HomePage() {
       {/* ── Footer ── */}
       <footer className="border-t border-sand bg-white/50 py-6 px-4">
         <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-xs text-stone">
-          <span>{PRODUCT_NAME}</span>
+          <span>{brandName}</span>
           <span className="hidden sm:inline">·</span>
           <span>Open-source self-hosted support tool</span>
           <span className="hidden sm:inline">·</span>

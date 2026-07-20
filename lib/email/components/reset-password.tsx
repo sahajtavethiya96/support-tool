@@ -6,13 +6,16 @@ export function ResetPasswordEmail({
   email,
   resetUrl,
   productName = PRODUCT_NAME,
+  logoUrl,
 }: {
   email: string;
   resetUrl: string;
   productName?: string;
+  logoUrl?: string | null;
 }) {
   return (
     <EmailLayout
+      logoUrl={logoUrl}
       preview={`Set your ${productName} password`}
       productName={productName}
     >

@@ -4,6 +4,9 @@ export const platformSettings = pgTable("platform_settings", {
   id: text("id").primaryKey().default("default"),
   theme: text("theme").notNull().default("default"),
   appearanceMode: text("appearance_mode").notNull().default("auto"),
+  // White-label branding — null means "use the PRODUCT_NAME/wordmark default".
+  brandName: text("brand_name"),
+  logoKey: text("logo_key"),
   // Per-method sign-in toggles. Fresh install: only password is on — an
   // admin explicitly enables magic link/Google from /admin/appearance.
   // Google also requires env credentials to be configured regardless of

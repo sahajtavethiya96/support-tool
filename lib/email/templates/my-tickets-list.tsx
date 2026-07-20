@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { Button, Hr, Link, Section, Text } from "react-email";
-import { PRODUCT_NAME } from "@/config/platform";
 import { EmailLayout, emailStyles } from "@/lib/email/components/layout";
 import { renderEmailTemplate } from "@/lib/email/renderer";
+import { getEmailBranding } from "@/lib/settings";
 
 const brand = "#384959";
 
@@ -10,13 +10,16 @@ function MyTicketsListEmail({
   listUrl,
   ticketCount,
   productName,
+  logoUrl,
 }: {
   listUrl: string;
   ticketCount: number;
   productName: string;
+  logoUrl: string | null;
 }) {
   return (
     <EmailLayout
+      logoUrl={logoUrl}
       preview={`View your ${ticketCount} support ticket${ticketCount === 1 ? "" : "s"}`}
       productName={productName}
     >
@@ -49,9 +52,9 @@ export async function myTicketsListTemplate(props: {
   listUrl: string;
   ticketCount: number;
 }) {
-  const productName = PRODUCT_NAME;
+  const { productName, logoUrl } = await getEmailBranding();
   const html = await renderEmailTemplate(
-    createElement(MyTicketsListEmail, { ...props, productName })
+    createElement(MyTicketsListEmail, { ...props, productName, logoUrl })
   );
 
   const text = `Your support tickets

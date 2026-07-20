@@ -2,7 +2,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { count, eq, ilike, or } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { ADMIN_ROLE, AGENT_ROLE, PRODUCT_NAME } from "@/config/platform";
+import { ADMIN_ROLE, AGENT_ROLE } from "@/config/platform";
 import { user } from "@/db/schema";
 import { requireAdminFromRequest } from "@/lib/authz";
 import { db } from "@/lib/db";
@@ -10,7 +10,11 @@ import { enqueueEmail } from "@/lib/email";
 import { userInvitedTemplate } from "@/lib/email/templates/user-invited";
 import { env } from "@/lib/env";
 import { createPasswordSetupToken } from "@/lib/password-setup-token";
-import { getPlatformSettings } from "@/lib/settings";
+import {
+  getPlatformSettings,
+  resolveBrandName,
+  resolveLogoUrl,
+} from "@/lib/settings";
 
 // GET /api/users — list all users (admin only)
 export async function GET(request: NextRequest) {
@@ -132,9 +136,10 @@ export async function POST(request: NextRequest) {
   // (magic-link/Google-only shops) the plain /login link already works
   // since the user row itself is enough for those methods to find them.
   const signInUrl = `${env.NEXT_PUBLIC_APP_URL}/login`;
-  const appName = PRODUCT_NAME;
   (async () => {
     const settings = await getPlatformSettings();
+    const appName = resolveBrandName(settings.brandName);
+    const logoUrl = resolveLogoUrl(settings.logoKey, true);
     const passwordSetupUrl = settings.passwordLoginEnabled
       ? `${env.NEXT_PUBLIC_APP_URL}/reset-password?token=${await createPasswordSetupToken(newId)}`
       : undefined;
@@ -144,6 +149,7 @@ export async function POST(request: NextRequest) {
       role,
       signInUrl,
       appName,
+      logoUrl,
       passwordSetupUrl,
     });
 
