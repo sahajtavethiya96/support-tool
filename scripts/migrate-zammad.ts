@@ -22,8 +22,12 @@
  *     case variants of one tag collapse into a single shared row
  *   ✗ Zammad's ticket NUMBER (this app assigns its own serial; the original is
  *     recorded in a `zammad_migrated` activity row's metadata)
- *   ✗ agent ACCOUNTS — historical agent replies keep the agent's name but are
- *     not linked to a `user` row (authorId stays null)
+ *   ~ agent ACCOUNTS — run scripts/migrate-zammad-users.ts FIRST (creates a
+ *     Support Tool `user` per Zammad agent/admin) and this script links every
+ *     reply's authorId/uploadedById to that account by email as it migrates.
+ *     If a reply's author has no matching account yet, it just keeps their
+ *     name/role as plain text (authorId stays null) — safe either order, but
+ *     users-then-tickets gets more replies linked without a second pass.
  *
  * IDEMPOTENT / RESUMABLE
  *   Each migrated ticket gets a `ticket_activity` row (action "zammad_migrated",
@@ -58,6 +62,7 @@ import {
   ticketComments,
   tickets,
   ticketTags,
+  user,
 } from "@/db/schema";
 import { db, dbClient } from "@/lib/db";
 import {
@@ -156,40 +161,40 @@ async function getZammadTags(ticketId: number): Promise<string[]> {
 
 // ── Zammad shapes (only the fields we read) ───────────────────────────────────
 interface ZUser {
-  id: number;
-  firstname?: string;
-  lastname?: string;
   email?: string;
+  firstname?: string;
+  id: number;
+  lastname?: string;
   login?: string;
 }
 interface ZTicket {
+  close_at?: string | null;
+  created_at: string;
+  customer_id: number;
   id: number;
   number: string;
-  title: string;
-  customer_id: number;
-  state_id: number;
   priority_id: number;
-  created_at: string;
+  state_id: number;
+  title: string;
   updated_at: string;
-  close_at?: string | null;
 }
 interface ZAttachment {
-  id: number;
   filename: string;
-  size?: string;
+  id: number;
   preferences?: { "Content-Type"?: string };
+  size?: string;
 }
 interface ZArticle {
-  id: number;
-  ticket_id: number;
-  from?: string;
+  attachments?: ZAttachment[];
   body?: string;
   content_type?: string;
+  created_at: string;
+  created_by_id: number;
+  from?: string;
+  id: number;
   internal: boolean;
   sender_id: number;
-  created_by_id: number;
-  created_at: string;
-  attachments?: ZAttachment[];
+  ticket_id: number;
 }
 
 // ── Caches / lookup maps built once from Zammad ───────────────────────────────
@@ -211,6 +216,34 @@ async function getZUser(id: number): Promise<ZUser | null> {
   }
 }
 
+// Zammad user id → this app's user id, resolved by email (null if the
+// Zammad user has no email or no matching Support Tool account — e.g. the
+// scripts/migrate-zammad-users.ts migration hasn't been run yet, in which
+// case comments/attachments just keep authorId/uploadedById null, same as
+// before this lookup existed).
+const localUserIdByZammadUserId = new Map<number, string | null>();
+async function resolveLocalAuthorId(
+  zammadUserId: number
+): Promise<string | null> {
+  const cached = localUserIdByZammadUserId.get(zammadUserId);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const zUser = await getZUser(zammadUserId);
+  const email = (zUser?.email ?? "").trim().toLowerCase();
+  let localId: string | null = null;
+  if (email) {
+    const [row] = await db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.email, email))
+      .limit(1);
+    localId = row?.id ?? null;
+  }
+  localUserIdByZammadUserId.set(zammadUserId, localId);
+  return localId;
+}
+
 function zUserName(u: ZUser | null): string {
   if (!u) {
     return "";
@@ -223,10 +256,9 @@ function zUserName(u: ZUser | null): string {
 let senderNameById = new Map<number, string>();
 async function loadSenders() {
   try {
-    const rows =
-      await zammadGet<Array<{ id: number; name: string }>>(
-        "/ticket_article_senders"
-      );
+    const rows = await zammadGet<Array<{ id: number; name: string }>>(
+      "/ticket_article_senders"
+    );
     senderNameById = new Map(rows.map((r) => [r.id, r.name]));
   } catch {
     // Fall back to the stock Zammad ids: 1 Agent, 2 Customer, 3 System.
@@ -243,14 +275,10 @@ async function loadSenders() {
 let statusSlugByStateId = new Map<number, string>();
 async function loadStateMap(openSlug: string, closedSlug: string) {
   try {
-    const rows = await zammadGet<
-      Array<{ id: number; name: string }>
-    >("/ticket_states");
+    const rows =
+      await zammadGet<Array<{ id: number; name: string }>>("/ticket_states");
     statusSlugByStateId = new Map(
-      rows.map((s) => [
-        s.id,
-        /clos|merg/i.test(s.name) ? closedSlug : openSlug,
-      ])
+      rows.map((s) => [s.id, /clos|merg/i.test(s.name) ? closedSlug : openSlug])
     );
   } catch {
     // Stock Zammad: 4 = closed, 5 = merged.
@@ -284,9 +312,10 @@ async function loadPriorityMap(validSlugs: Set<string>, defaultSlug: string) {
     return defaultSlug;
   };
   try {
-    const rows = await zammadGet<
-      Array<{ id: number; name: string }>
-    >("/ticket_priorities");
+    const rows =
+      await zammadGet<Array<{ id: number; name: string }>>(
+        "/ticket_priorities"
+      );
     prioritySlugById = new Map(rows.map((p) => [p.id, pick(p.name)]));
   } catch {
     prioritySlugById = new Map([
@@ -390,16 +419,17 @@ async function loadMigratedZammadIds(): Promise<Set<string>> {
 
 // ── Per-ticket migration ──────────────────────────────────────────────────────
 interface StagedAttachment {
-  id: string;
-  ticketId: string;
   commentId: string | null;
+  createdAt: Date;
   filename: string;
-  storageKey: string;
   fileSize: number;
+  id: string;
   mimeType: string;
+  storageKey: string;
+  ticketId: string;
+  uploadedById: string | null;
   uploadedByName: string;
   uploadedByRole: string;
-  createdAt: Date;
 }
 
 async function migrateOneTicket(
@@ -446,27 +476,36 @@ async function migrateOneTicket(
     ? articleToRichText(opening, descriptionPlainFallback)
     : textToRichTextJson(descriptionPlainFallback);
 
-  // Resolve a display role/name for an article.
+  // Resolve a display role/name/local-user-id for an article. authorId is
+  // only ever non-null when scripts/migrate-zammad-users.ts has already run
+  // and created a Support Tool account matching this Zammad author's email —
+  // run that script FIRST so replies link to a real user as they're migrated,
+  // rather than relying on the separate name-matching backfill it also does.
   const roleFor = async (
     article: ZArticle
-  ): Promise<{ role: "customer" | "agent"; name: string }> => {
+  ): Promise<{
+    role: "customer" | "agent";
+    name: string;
+    authorId: string | null;
+  }> => {
     const senderName = senderNameById.get(article.sender_id) ?? "Agent";
     if (senderName === "Customer") {
-      return { role: "customer", name: customerName };
+      return { role: "customer", name: customerName, authorId: null };
     }
     const author = await getZUser(article.created_by_id);
     const name =
       zUserName(author) ||
       (article.from ?? "").replace(/<[^>]*>/g, "").trim() ||
       "Support Agent";
-    return { role: "agent", name };
+    const authorId = await resolveLocalAuthorId(article.created_by_id);
+    return { role: "agent", name, authorId };
   };
 
   // Stage comment rows (everything after the opening article) + track the
   // awaiting-reply bookkeeping the app maintains on every reply.
   const openingMeta = opening
     ? await roleFor(opening)
-    : { role: "customer" as const, name: customerName };
+    : { role: "customer" as const, name: customerName, authorId: null };
 
   const commentRows: Array<typeof ticketComments.$inferInsert> = [];
   // Opening message counts as the first customer message → pendingReplies 1.
@@ -505,7 +544,7 @@ async function migrateOneTicket(
     commentRows.push({
       id: commentId,
       ticketId,
-      authorId: null,
+      authorId: meta.authorId,
       authorName: meta.name,
       authorRole: meta.role,
       content,
@@ -536,9 +575,7 @@ async function migrateOneTicket(
   }
 
   const createdAt = new Date(zTicket.created_at);
-  const lastActivityAt = new Date(
-    zTicket.updated_at ?? zTicket.created_at
-  );
+  const lastActivityAt = new Date(zTicket.updated_at ?? zTicket.created_at);
   const status = statusForState(zTicket.state_id, cfg.openSlug);
   const isClosed = status !== cfg.openSlug; // openSlug is the only non-closed default
   const closedAt = zTicket.close_at
@@ -607,7 +644,7 @@ async function migrateOneTicket(
             storageKey: a.storageKey,
             fileSize: a.fileSize,
             mimeType: a.mimeType,
-            uploadedById: null,
+            uploadedById: a.uploadedById,
             uploadedByName: a.uploadedByName,
             uploadedByRole: a.uploadedByRole,
             createdAt: a.createdAt,
@@ -667,7 +704,7 @@ async function stageAttachment(
   commentId: string | null,
   article: ZArticle,
   att: ZAttachment,
-  by: { role: "customer" | "agent"; name: string }
+  by: { role: "customer" | "agent"; name: string; authorId: string | null }
 ): Promise<StagedAttachment | null> {
   try {
     const buffer = await zammadGetBinary(
@@ -676,7 +713,9 @@ async function stageAttachment(
     if (buffer.length === 0) {
       return null;
     }
-    const mimeType = (att.preferences?.["Content-Type"] ?? "application/octet-stream")
+    const mimeType = (
+      att.preferences?.["Content-Type"] ?? "application/octet-stream"
+    )
       .split(";")[0]
       .trim();
     const ext = att.filename.includes(".")
@@ -696,6 +735,7 @@ async function stageAttachment(
       storageKey,
       fileSize: buffer.length,
       mimeType,
+      uploadedById: by.authorId,
       uploadedByName: by.name,
       uploadedByRole: by.role,
       createdAt: new Date(article.created_at),
@@ -717,10 +757,10 @@ async function main() {
   console.log(
     `  filter:   ${ZAMMAD_SEARCH ? `search "${ZAMMAD_SEARCH}"` : "ALL tickets"}`
   );
-  if (LIMIT != null) {
-    console.log(`  limit:    first ${LIMIT} ticket(s) seen (oldest-first)\n`);
-  } else {
+  if (LIMIT == null) {
     console.log("");
+  } else {
+    console.log(`  limit:    first ${LIMIT} ticket(s) seen (oldest-first)\n`);
   }
 
   // Resolve this app's config → the slugs we'll map Zammad values onto.
@@ -734,8 +774,7 @@ async function main() {
     ]);
 
   const openSlug = defaultStatus?.slug ?? "open";
-  const closedSlug =
-    statuses.find((s) => s.isClosedState)?.slug ?? "closed";
+  const closedSlug = statuses.find((s) => s.isClosedState)?.slug ?? "closed";
   const defaultPrioritySlug = defaultPriority?.slug ?? "normal";
   const prioritySlugs = new Set(priorities.map((p) => p.slug));
 
@@ -801,7 +840,9 @@ async function main() {
     } catch (err) {
       failed += 1;
       checkpoint.failed[zid] = (err as Error).message;
-      console.error(`  ✗ #${zTicket.number} (Zammad id ${zid}): ${(err as Error).message}`);
+      console.error(
+        `  ✗ #${zTicket.number} (Zammad id ${zid}): ${(err as Error).message}`
+      );
     }
 
     // Persist progress every ticket so a crash resumes almost exactly.

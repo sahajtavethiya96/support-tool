@@ -5,12 +5,14 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import {
   and,
+  asc,
   count,
   desc,
   eq,
   gte,
   ilike,
   inArray,
+  isNull,
   lte,
   or,
 } from "drizzle-orm";
@@ -51,14 +53,23 @@ type SearchParams = {
   status?: string;
   category?: string;
   priority?: string;
+  assignee?: string;
   range?: string;
   from?: string;
   to?: string;
   awaiting?: string;
   mine?: string;
+  sort?: string;
+  order?: string;
   page?: string;
   pageSize?: string;
 };
+
+const SORT_COLUMNS = {
+  id: tickets.ticketNumber,
+  updatedAt: tickets.updatedAt,
+} as const;
+type SortKey = keyof typeof SORT_COLUMNS;
 
 const RANGE_DAYS: Record<string, number> = {
   last_day: 1,
@@ -133,17 +144,28 @@ export default async function TicketsPage({ searchParams }: Props) {
   const params = await searchParams;
 
   const session = await requireAgent();
-  const [statuses, categories, priorities, columnPrefs] = await Promise.all([
-    getTicketStatuses(),
-    getTicketCategories(),
-    getTicketPriorities(),
-    getTicketTableColumnPrefs(session.id),
-  ]);
+  const [statuses, categories, priorities, columnPrefs, agents] =
+    await Promise.all([
+      getTicketStatuses(),
+      getTicketCategories(),
+      getTicketPriorities(),
+      getTicketTableColumnPrefs(session.id),
+      db
+        .select({ id: user.id, name: user.name, email: user.email })
+        .from(user)
+        .where(
+          and(
+            eq(user.banned, false),
+            or(eq(user.role, AGENT_ROLE), eq(user.role, ADMIN_ROLE))
+          )
+        ),
+    ]);
 
   return (
     <div className="p-6 space-y-5">
       <TicketsListRealtime />
       <TicketFilters
+        agents={agents}
         categories={categories}
         priorities={priorities}
         statuses={statuses}
@@ -157,6 +179,7 @@ export default async function TicketsPage({ searchParams }: Props) {
       >
         <TicketsResults
           agentId={session.id}
+          agents={agents}
           categories={categories}
           columnPrefs={columnPrefs}
           isAdmin={session.role === ADMIN_ROLE}
@@ -172,6 +195,7 @@ export default async function TicketsPage({ searchParams }: Props) {
 async function TicketsResults({
   params,
   agentId,
+  agents,
   isAdmin,
   statuses,
   categories,
@@ -180,6 +204,7 @@ async function TicketsResults({
 }: {
   params: SearchParams;
   agentId: string;
+  agents: Array<{ id: string; name: string | null; email: string }>;
   isAdmin: boolean;
   statuses: TicketStatus[];
   categories: TicketCategory[];
@@ -202,10 +227,14 @@ async function TicketsResults({
     params.category && params.category !== "all" ? params.category : null;
   const priorityFilter =
     params.priority && params.priority !== "all" ? params.priority : null;
+  const assigneeFilter =
+    params.assignee && params.assignee !== "all" ? params.assignee : null;
   const rangeFilter =
     params.range && params.range !== "all" ? params.range : null;
   const awaitingFilter = params.awaiting === "1";
   const mineFilter = params.mine === "1";
+  const sortKey: SortKey = params.sort === "id" ? "id" : "updatedAt";
+  const sortOrder = params.order === "asc" ? "asc" : "desc";
 
   // Build where conditions
   const conditions = [];
@@ -265,6 +294,13 @@ async function TicketsResults({
   if (mineFilter) {
     conditions.push(eq(tickets.assignedAgentId, agentId));
   }
+  if (assigneeFilter) {
+    conditions.push(
+      assigneeFilter === "unassigned"
+        ? isNull(tickets.assignedAgentId)
+        : eq(tickets.assignedAgentId, assigneeFilter)
+    );
+  }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -290,7 +326,11 @@ async function TicketsResults({
     .from(tickets)
     .leftJoin(user, eq(tickets.assignedAgentId, user.id))
     .where(whereClause)
-    .orderBy(desc(tickets.updatedAt))
+    .orderBy(
+      sortOrder === "asc"
+        ? asc(SORT_COLUMNS[sortKey])
+        : desc(SORT_COLUMNS[sortKey])
+    )
     .limit(pageSize)
     .offset((page - 1) * pageSize);
 
@@ -329,17 +369,6 @@ async function TicketsResults({
     updatedByName: updatedByTicket[r.id] ?? null,
   }));
 
-  // Needed for the per-row and bulk-assign (admin only) assignee pickers.
-  const agents = await db
-    .select({ id: user.id, name: user.name, email: user.email })
-    .from(user)
-    .where(
-      and(
-        eq(user.banned, false),
-        or(eq(user.role, AGENT_ROLE), eq(user.role, ADMIN_ROLE))
-      )
-    );
-
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   function buildPageUrl(p: number) {
@@ -356,6 +385,9 @@ async function TicketsResults({
     if (priorityFilter) {
       qp.set("priority", priorityFilter);
     }
+    if (assigneeFilter) {
+      qp.set("assignee", assigneeFilter);
+    }
     if (rangeFilter) {
       qp.set("range", rangeFilter);
     }
@@ -364,6 +396,12 @@ async function TicketsResults({
     }
     if (mineFilter) {
       qp.set("mine", "1");
+    }
+    if (sortKey !== "updatedAt") {
+      qp.set("sort", sortKey);
+    }
+    if (sortOrder !== "desc") {
+      qp.set("order", sortOrder);
     }
     if (pageSize !== DEFAULT_PAGE_SIZE) {
       qp.set("pageSize", String(pageSize));

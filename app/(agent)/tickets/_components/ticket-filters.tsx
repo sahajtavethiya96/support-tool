@@ -50,13 +50,25 @@ const parseDay = (iso: string) => new Date(`${iso}T00:00:00`);
 const toIso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
+interface Agent {
+  email: string;
+  id: string;
+  name: string | null;
+}
+
 interface Props {
+  agents: Agent[];
   categories: TicketCategory[];
   priorities: TicketPriority[];
   statuses: TicketStatus[];
 }
 
-export function TicketFilters({ statuses, categories, priorities }: Props) {
+export function TicketFilters({
+  statuses,
+  categories,
+  priorities,
+  agents,
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -67,6 +79,7 @@ export function TicketFilters({ statuses, categories, priorities }: Props) {
   const status = searchParams.get("status") ?? "all";
   const category = searchParams.get("category") ?? "all";
   const priority = searchParams.get("priority") ?? "all";
+  const assignee = searchParams.get("assignee") ?? "all";
   const range = searchParams.get("range") ?? "all";
   const from = searchParams.get("from") ?? "";
   const to = searchParams.get("to") ?? "";
@@ -118,6 +131,9 @@ export function TicketFilters({ statuses, categories, priorities }: Props) {
   const priorityMap = Object.fromEntries(
     priorities.map((p) => [p.slug, p.label])
   );
+  const agentMap = Object.fromEntries(
+    agents.map((a) => [a.id, a.name ?? a.email])
+  );
 
   const activeFilters = [
     status !== "all" && {
@@ -135,6 +151,13 @@ export function TicketFilters({ statuses, categories, priorities }: Props) {
     priority !== "all" && {
       key: "priority",
       label: priorityMap[priority] ?? priority,
+    },
+    assignee !== "all" && {
+      key: "assignee",
+      label:
+        assignee === "unassigned"
+          ? "Unassigned"
+          : (agentMap[assignee] ?? assignee),
     },
     range !== "all" && {
       key: "range",
@@ -162,6 +185,7 @@ export function TicketFilters({ statuses, categories, priorities }: Props) {
       status: "all",
       category: "all",
       priority: "all",
+      assignee: "all",
       range: "all",
       from: "",
       to: "",
@@ -289,6 +313,27 @@ export function TicketFilters({ statuses, categories, priorities }: Props) {
                   searchPlaceholder="Search priority…"
                   triggerClassName="w-full"
                   value={priority}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Assignee
+                </span>
+                <SearchableSelect
+                  onValueChange={(v) => updateParams({ assignee: v })}
+                  options={[
+                    { value: "all", label: "All Assignees" },
+                    { value: "unassigned", label: "Unassigned" },
+                    ...agents.map((a) => ({
+                      value: a.id,
+                      label: a.name ?? a.email,
+                    })),
+                  ]}
+                  placeholder="All Assignees"
+                  searchPlaceholder="Search agents…"
+                  triggerClassName="w-full"
+                  value={assignee}
                 />
               </div>
 

@@ -94,19 +94,27 @@ docker build -f Dockerfile.worker -t support-tool-worker .
 ## Migrating from Zammad
 
 Two one-off, idempotent scripts (safe to re-run — already-migrated data is skipped,
-never duplicated). Run `migrate:zammad` first, then `migrate:zammad:users`; each
-script's own header comment has the full details.
+never duplicated). Run `migrate:zammad:users` **first**, then `migrate:zammad` —
+that order lets the ticket migration link each reply's author directly (by email)
+as it writes it, instead of relying on a slower name-matching backfill afterward.
+Each script's own header comment has the full details.
 
 ```bash
-# 1) Tickets, comments, attachments, tags — see scripts/migrate-zammad.ts
-ZAMMAD_BASE_URL=... ZAMMAD_API_TOKEN=... pnpm migrate:zammad
-
-# 2) Agent/admin accounts — creates a Support Tool user (as a plain agent) for
-#    every Zammad Agent/Admin, all sharing one default password, and connects
-#    historical replies/attachments to the new accounts by author name.
+# 1) Agent/admin accounts — creates a Support Tool user (as a plain agent) for
+#    every Zammad Agent/Admin, all sharing one default password.
 #    See scripts/migrate-zammad-users.ts.
 ZAMMAD_BASE_URL=... ZAMMAD_API_TOKEN=... pnpm migrate:zammad:users
+
+# 2) Tickets, comments, attachments, tags — see scripts/migrate-zammad.ts.
+#    Links each reply's author_id/uploaded_by_id to the user created in step 1
+#    (matched by email) as it migrates.
+ZAMMAD_BASE_URL=... ZAMMAD_API_TOKEN=... pnpm migrate:zammad
 ```
+
+Ran it in the other order, or migrated tickets before any users existed? Re-run
+`migrate:zammad:users` afterward — it always re-sweeps already-migrated
+comments/attachments and connects any still-unlinked ones by matching author name,
+so nothing is left behind.
 
 Both accept `MIGRATION_DRY_RUN=1` to preview without writing. The user-migration
 script's shared default password is `debutify@123456` unless overridden via

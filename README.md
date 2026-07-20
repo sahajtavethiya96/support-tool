@@ -1,8 +1,26 @@
 # Support Tool
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 An open-source, self-hosted customer support ticketing system. Deploy it on your own infrastructure and handle customer support tickets without giving your data to a third party.
 
 Built with Next.js, PostgreSQL, Drizzle ORM, and Better Auth.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Quick Start](#quick-start)
+- [Environment Variables](#environment-variables)
+- [Docker (Self-Hosted)](#docker-self-hosted)
+- [Deployment](#deployment)
+- [Roles](#roles)
+- [Migrating from Zammad](#migrating-from-zammad)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
@@ -103,6 +121,16 @@ Open `http://localhost:3000`.
 | `NEXT_PUBLIC_PUSHER_KEY` | No | Pusher Channels app key (baked in at build time) |
 | `PUSHER_SECRET` | No | Pusher Channels secret (server only) |
 | `NEXT_PUBLIC_PUSHER_CLUSTER` | No | Pusher Channels cluster, e.g. `us2`, `eu` (baked in at build time) |
+| `STORAGE_DRIVER` | No | File storage backend: `local` (default), `s3`, or `r2` — see [docs/file-uploads.md](docs/file-uploads.md) |
+| `S3_BUCKET` / `S3_REGION` | If `STORAGE_DRIVER=s3` | Bucket + region. AWS credentials come from the standard AWS credential chain (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, an IAM role, or a shared profile) |
+| `R2_BUCKET` / `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | If `STORAGE_DRIVER=r2` | Cloudflare R2 bucket + credentials |
+| `STORAGE_PUBLIC_BASE_URL` | No | Optional CDN/custom domain bound to the S3/R2 bucket — only needed if other tooling reads the bucket directly; Support Tool itself never needs it |
+
+> **File storage:** defaults to local disk at `./uploads`. In Docker this MUST be a
+> persistent volume or every redeploy wipes uploaded files — the provided compose files
+> already mount one. Cloud drivers (`s3`/`r2`) need no volume and work across multiple
+> app replicas. Env vars for the selected driver are validated at boot, not on first
+> upload. See [docs/file-uploads.md](docs/file-uploads.md).
 
 > **Agent notifications:** customer replies notify agents **in-app** via the notification
 > bell (no config needed). Configure the two `*_PUSHER_BEAMS_*` vars to also send OS-level
@@ -226,12 +254,60 @@ enough.
 
 ---
 
+## Migrating from Zammad
+
+Two one-off, idempotent scripts pull historical data over from an existing Zammad
+instance — safe to re-run, already-migrated data is never duplicated:
+
+```bash
+# 1) Agents/admins first, so replies link to a real account by email
+ZAMMAD_BASE_URL=... ZAMMAD_API_TOKEN=... pnpm migrate:zammad:users
+
+# 2) Tickets, comments, attachments, and tags
+ZAMMAD_BASE_URL=... ZAMMAD_API_TOKEN=... pnpm migrate:zammad
+```
+
+Run `migrate:zammad:users` before `migrate:zammad` for the most complete author
+linking (running it after still works — it re-sweeps and backfills). Both scripts
+support a `MIGRATION_DRY_RUN=1` preview and a `MIGRATION_LIMIT` to migrate in batches.
+See [docs/commands.md](docs/commands.md) and [docs/deployment-and-zammad-migration.md](docs/deployment-and-zammad-migration.md)
+for the full runbook.
+
+---
+
+## Documentation
+
+Feature specs and internal architecture docs live in [`docs/`](docs/):
+
+| Topic | Doc |
+|-------|-----|
+| Authentication | [docs/authentication.md](docs/authentication.md) |
+| Customer Portal | [docs/customer-portal.md](docs/customer-portal.md) |
+| Agent Portal | [docs/agent-portal.md](docs/agent-portal.md) |
+| Admin Portal | [docs/admin-portal.md](docs/admin-portal.md) |
+| Tickets | [docs/tickets.md](docs/tickets.md) |
+| Public API | [docs/api.md](docs/api.md) |
+| File Uploads | [docs/file-uploads.md](docs/file-uploads.md) |
+| Email Notifications | [docs/email-notifications.md](docs/email-notifications.md) |
+| In-App Notifications | [docs/in-app-notifications.md](docs/in-app-notifications.md) |
+| Real-Time Updates | [docs/realtime-updates.md](docs/realtime-updates.md) |
+| Permission Model | [docs/permission-model.md](docs/permission-model.md) |
+| Dashboard | [docs/dashboard.md](docs/dashboard.md) |
+| Database Schema | [docs/database-schema.md](docs/database-schema.md) |
+| Design System | [docs/design-system.md](docs/design-system.md) |
+| Commands Reference | [docs/commands.md](docs/commands.md) |
+| Development Plan | [docs/development-plan.md](docs/development-plan.md) |
+
+---
+
 ## Contributing
 
-Contributions are welcome. Please open an issue before submitting a large PR.
+Contributions are welcome. Please open an issue before submitting a large PR. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for project layout, conventions, and how to get a
+dev environment running.
 
 ---
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

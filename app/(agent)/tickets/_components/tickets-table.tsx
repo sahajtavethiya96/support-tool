@@ -1,7 +1,13 @@
 "use client";
 
-import { TrashIcon, WarningCircleIcon } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
+import {
+  CaretUpDownIcon,
+  SortAscendingIcon,
+  SortDescendingIcon,
+  TrashIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { SearchableSelect } from "@/components/common/searchable-select";
@@ -41,6 +47,23 @@ const COLUMN_META = Object.fromEntries(
   CUSTOMIZABLE_COLUMNS.map((c) => [c.id, c])
 );
 
+function SortIcon({
+  active,
+  order,
+}: {
+  active: boolean;
+  order: "asc" | "desc";
+}) {
+  if (!active) {
+    return <CaretUpDownIcon className="size-3.5 text-muted-foreground/50" />;
+  }
+  return order === "asc" ? (
+    <SortAscendingIcon className="size-3.5 text-foreground" />
+  ) : (
+    <SortDescendingIcon className="size-3.5 text-foreground" />
+  );
+}
+
 interface Agent {
   email: string;
   id: string;
@@ -75,9 +98,23 @@ export function TicketsTable({
 }) {
   const visibleColumns = columnPrefs.filter((c) => c.visible);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const activeSort = searchParams.get("sort") === "id" ? "id" : "updatedAt";
+  const activeOrder = searchParams.get("order") === "asc" ? "asc" : "desc";
+
+  function toggleSort(column: "id" | "updatedAt") {
+    const params = new URLSearchParams(searchParams.toString());
+    const nextOrder =
+      activeSort === column && activeOrder === "desc" ? "asc" : "desc";
+    params.set("sort", column);
+    params.set("order", nextOrder);
+    params.delete("page"); // reset pagination on sort change
+    router.push(`/tickets?${params.toString()}`);
+  }
 
   const allSelected = rows.length > 0 && selected.size === rows.length;
   const someSelected = selected.size > 0;
@@ -226,8 +263,18 @@ export function TicketsTable({
                     />
                   </th>
                 )}
-                <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-16">
-                  #
+                <th className="w-16 px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <button
+                    className="inline-flex items-center gap-1 hover:text-foreground"
+                    onClick={() => toggleSort("id")}
+                    type="button"
+                  >
+                    #
+                    <SortIcon
+                      active={activeSort === "id"}
+                      order={activeOrder}
+                    />
+                  </button>
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide w-56">
                   Subject
@@ -237,7 +284,21 @@ export function TicketsTable({
                     className={`text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide ${COLUMN_META[c.id].width}`}
                     key={c.id}
                   >
-                    {COLUMN_META[c.id].label}
+                    {c.id === "updatedAt" ? (
+                      <button
+                        className="inline-flex items-center gap-1 hover:text-foreground"
+                        onClick={() => toggleSort("updatedAt")}
+                        type="button"
+                      >
+                        {COLUMN_META[c.id].label}
+                        <SortIcon
+                          active={activeSort === "updatedAt"}
+                          order={activeOrder}
+                        />
+                      </button>
+                    ) : (
+                      COLUMN_META[c.id].label
+                    )}
                   </th>
                 ))}
               </tr>
