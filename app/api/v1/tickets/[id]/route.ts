@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { ticketAttachments, tickets } from "@/db/schema";
 import { requireApiKey } from "@/lib/api-auth";
+import { coerceCustomFieldValue, getCustomFieldValues } from "@/lib/custom-fields";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { richTextToHtml, richTextToPlainText } from "@/lib/rich-text";
@@ -66,6 +67,14 @@ export async function GET(
     )
     .orderBy(asc(ticketAttachments.createdAt));
 
+  const customFieldValues = await getCustomFieldValues(id);
+  const customFields = Object.fromEntries(
+    customFieldValues.map((f) => [
+      f.key,
+      coerceCustomFieldValue(f.type, f.value),
+    ])
+  );
+
   return NextResponse.json({
     id: ticket.id,
     ticketNumber: ticket.ticketNumber,
@@ -84,6 +93,7 @@ export async function GET(
       mimeType: a.mimeType,
       url: `${env.NEXT_PUBLIC_APP_URL}/api/v1/tickets/${id}/attachments/${a.id}`,
     })),
+    customFields,
     createdAt: ticket.createdAt,
     updatedAt: ticket.updatedAt,
   });

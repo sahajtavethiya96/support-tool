@@ -257,6 +257,41 @@ Indexes:
 - tag_id
 ```
 
+### `ticket_custom_fields`
+
+Admin-managed field definitions (text/number/date/checkbox/select) — analogous to `ticket_statuses`/`ticket_categories`/`ticket_priorities`. Managed at `/admin/custom-fields`.
+
+```
+ticket_custom_fields
+├── id                text PK (cuid2)
+├── key               text NOT NULL UNIQUE   ← stable machine key, auto-slugified from label; used in API payloads
+├── label             text NOT NULL
+├── type              text NOT NULL          ← "text" | "number" | "date" | "checkbox" | "select"
+├── options           jsonb                  ← string[], only set when type = "select"
+├── required           boolean NOT NULL DEFAULT false
+├── sort_order        integer NOT NULL DEFAULT 0
+├── created_at        timestamp with time zone NOT NULL DEFAULT NOW()
+└── updated_at        timestamp with time zone NOT NULL DEFAULT NOW()
+```
+
+### `ticket_custom_field_values`
+
+Per-ticket values, one row per (ticket, field). Deleting a field definition cascades here (unlike categories/statuses, this is a real FK, not a denormalized slug string, so there's no "blocked because in use" check on delete).
+
+```
+ticket_custom_field_values
+├── id                text PK (cuid2)
+├── ticket_id         text NOT NULL → tickets.id (CASCADE DELETE)
+├── field_id          text NOT NULL → ticket_custom_fields.id (CASCADE DELETE)
+├── value             text            ← always stored as text: "true"/"false", numeric string, ISO date, or the selected option
+├── created_at        timestamp with time zone NOT NULL DEFAULT NOW()
+└── updated_at        timestamp with time zone NOT NULL DEFAULT NOW()
+
+Indexes:
+- (ticket_id, field_id) unique
+- field_id
+```
+
 ### `user_ticket_table_prefs`
 
 Per-agent/admin display preferences for the `/tickets` table — which columns are shown and in what order. One row per user, not shared.
@@ -291,6 +326,7 @@ db/schema/
 ├── tickets.ts         ← tickets, ticket_comments, ticket_attachments, ticket_activity
 ├── ticket-config.ts   ← ticket_statuses, ticket_categories, ticket_priorities
 ├── tags.ts            ← tags, ticket_tags
+├── custom-fields.ts   ← ticket_custom_fields, ticket_custom_field_values
 ├── user-preferences.ts ← user_ticket_table_prefs
 ├── api-keys.ts        ← api_keys
 ├── settings.ts        ← platform_settings

@@ -93,6 +93,19 @@ Tags are **freeform** — any agent can type a new tag on a ticket; it's created
 
 ---
 
+## Custom Fields
+
+Admin-defined extra structured fields — text, number, date, checkbox, or select — for data the built-in fields don't cover (order ID, account plan, etc.). Unlike Tags, these are admin-managed (like Statuses/Categories/Priorities): agents can't create one on the fly.
+
+- Defined at `/admin/custom-fields` (`ticket_custom_fields` table) — admin-only to add/edit/delete. Each field has a `label`, a `type`, an immutable machine `key` (auto-slugified from the label), and an optional `required` flag; `select` fields also have a fixed `options` list.
+- Values are per-ticket (`ticket_custom_field_values`, one row per ticket/field pair) and shown/edited in the ticket detail page's "Custom Fields" sidebar card — agent/admin only. Saves immediately on blur/change, like the other sidebar fields.
+- **Not** exposed on the customer portal submission form — customers never set these directly.
+- Settable at ticket-creation time via the public API's `customFields` payload (see `docs/api.md`), and readable via `GET /api/v1/tickets/:id` and `GET /api/v1/config`.
+- Deleting a field definition cascades to delete its stored values (hard delete, no "in use" block — unlike Categories/Statuses/Priorities, this is a real foreign key, not a denormalized slug on `tickets`).
+- Editing a field logs a `custom_field_changed` row in `ticket_activity`.
+
+---
+
 ## Ticket Number
 
 - `ticket_number` is a PostgreSQL `serial` (auto-increment integer).

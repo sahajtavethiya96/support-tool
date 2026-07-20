@@ -71,9 +71,28 @@ curl https://support.example.com/api/v1/config \
       "isDefault": true,
       "isClosedState": false
     }
+  ],
+  "customFields": [
+    {
+      "key": "order_id",
+      "label": "Order ID",
+      "type": "text",
+      "required": false
+    },
+    {
+      "key": "plan",
+      "label": "Plan",
+      "type": "select",
+      "options": ["Free", "Pro", "Enterprise"],
+      "required": true
+    }
   ]
 }
 ```
+
+`customFields` lists whatever an admin has configured at `/admin/custom-fields`
+(empty array if none). `type` is one of `text`, `number`, `date`, `checkbox`,
+`select`; `options` is only present for `select`.
 
 ## `POST /api/v1/tickets`
 
@@ -90,6 +109,18 @@ Create a ticket.
 | `descriptionFormat` | No | `"text"` (default) or `"html"` |
 | `category` | Yes | Must match a category slug configured in `/admin/ticket-config` |
 | `priority` | No | Must match a priority slug if given; falls back to the platform's default priority |
+| `customFields` | No | `{ "<key>": <value> }` map — see below |
+
+> **Custom fields.** Admins can define extra fields at `/admin/custom-fields`
+> (text, number, date, checkbox, or select) — fetch `GET /api/v1/config` to
+> see what's configured. Send matching values as a flat object keyed by each
+> field's `key`: strings for `text`/`date` (date as `YYYY-MM-DD`), a number
+> for `number`, `true`/`false` for `checkbox`, and one of the field's
+> `options` for `select`. **Required fields are only enforced if you include
+> the `customFields` object at all** — omit it entirely and ticket creation
+> proceeds without touching custom fields (so adding a required field later
+> never breaks an integration that doesn't know about it yet); include it
+> and any required field left out returns a `400`.
 
 > **Editor-agnostic by design.** Ticket descriptions are rich text
 > internally (same as replies), but you don't need to speak our internal
@@ -111,7 +142,8 @@ curl -X POST https://support.example.com/api/v1/tickets \
     "email": "jane@example.com",
     "subject": "Cannot log in",
     "description": "I get an error when I try to sign in.",
-    "category": "bug"
+    "category": "bug",
+    "customFields": { "order_id": "A-1042", "plan": "Pro" }
   }'
 ```
 
@@ -189,6 +221,12 @@ curl https://support.example.com/api/v1/tickets/cku1a2b3c4d5e6f \
   "updatedAt": "2026-07-02T09:15:00.000Z"
 }
 ```
+
+This endpoint also returns `category`, `priority`, `customerName`,
+`customerEmail`, `description`/`descriptionHtml`, `attachments`, and
+`customFields` (a flat `{ "<key>": <value> }` map, decoded to native JSON
+types — number/boolean/string — matching what you'd send on create); they're
+omitted above for brevity.
 
 `404` if the ticket doesn't exist. Any active API key can read any ticket
 on your instance — there's no per-key scoping, since a self-hosted

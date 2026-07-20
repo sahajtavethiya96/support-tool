@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
     category?: string;
     priority?: string;
     attachments?: unknown;
+    customFields?: Record<string, unknown>;
   };
   try {
     body = await request.json();
@@ -125,6 +126,7 @@ export async function POST(request: NextRequest) {
     description,
     category: String(body.category ?? ""),
     priority: body.priority ? String(body.priority) : undefined,
+    customFields: body.customFields,
   });
   if (!validated.ok) {
     return NextResponse.json(
@@ -156,6 +158,7 @@ export async function POST(request: NextRequest) {
     description,
     category: String(body.category ?? ""),
     priority: body.priority ? String(body.priority) : undefined,
+    customFields: body.customFields,
     source: "api",
     apiKeyId: apiKey.id,
     apiKeyName: apiKey.name,

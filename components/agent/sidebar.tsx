@@ -4,6 +4,7 @@ import {
   ChatTextIcon,
   ClockCounterClockwiseIcon,
   KeyIcon,
+  ListChecksIcon,
   PaintBrushIcon,
   ShieldCheckIcon,
   SquaresFourIcon,
@@ -33,6 +34,11 @@ const adminItems = [
   { href: "/admin/users", label: "Users", icon: UsersIcon },
   { href: "/admin/appearance", label: "Appearance", icon: PaintBrushIcon },
   { href: "/admin/ticket-config", label: "Ticket Config", icon: TagIcon },
+  {
+    href: "/admin/custom-fields",
+    label: "Custom Fields",
+    icon: ListChecksIcon,
+  },
   {
     href: "/admin/audit-log",
     label: "Audit Log",

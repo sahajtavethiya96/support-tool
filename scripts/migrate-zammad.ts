@@ -173,6 +173,9 @@ interface ZTicket {
   customer_id: number;
   id: number;
   number: string;
+  // Assigned agent. Stock Zammad reserves id 1 for the "-" placeholder
+  // owner (unassigned) — treated as null below, same as omitted/0.
+  owner_id?: number;
   priority_id: number;
   state_id: number;
   title: string;
@@ -468,6 +471,15 @@ async function migrateOneTicket(
   const customerName =
     zUserName(customer) || customerEmail.split("@")[0] || "Customer";
 
+  // Assignee — same email-matched lookup used for comment authors. Only
+  // resolves to a real agent if scripts/migrate-zammad-users.ts already
+  // created their account; otherwise the ticket lands unassigned, same as
+  // if owner_id were absent.
+  const assignedAgentId =
+    zTicket.owner_id && zTicket.owner_id > 1
+      ? await resolveLocalAuthorId(zTicket.owner_id)
+      : null;
+
   const opening = articles[0];
   const rest = articles.slice(1);
 
@@ -511,6 +523,23 @@ async function migrateOneTicket(
   // Opening message counts as the first customer message → pendingReplies 1.
   let pending = openingMeta.role === "customer" ? 1 : 0;
 
+  // Mirrors the activity rows the live app writes on ticket creation and on
+  // every reply (app/api/tickets/[id]/comments/route.ts, lib/tickets/create-ticket.ts)
+  // — without these, the ticket list's "Updated By" column (which reads the
+  // latest agent/admin ticketActivity row) has nothing to show for migrated
+  // tickets, even ones with real agent replies.
+  const activityRows: Array<typeof ticketActivity.$inferInsert> = [
+    {
+      id: createId(),
+      ticketId,
+      actorId: openingMeta.authorId,
+      actorName: openingMeta.name,
+      actorRole: openingMeta.role,
+      action: "ticket_created",
+      createdAt: new Date(zTicket.created_at),
+    },
+  ];
+
   const stagedAttachments: StagedAttachment[] = [];
 
   // Opening-message attachments belong to the ticket, not to a comment
@@ -552,6 +581,15 @@ async function migrateOneTicket(
       createdAt: new Date(article.created_at),
       updatedAt: new Date(article.created_at),
     });
+    activityRows.push({
+      id: createId(),
+      ticketId,
+      actorId: meta.authorId,
+      actorName: meta.name,
+      actorRole: meta.role,
+      action: article.internal ? "internal_note_added" : "comment_added",
+      createdAt: new Date(article.created_at),
+    });
 
     // Only PUBLIC messages affect awaiting-reply state.
     if (!article.internal) {
@@ -587,8 +625,8 @@ async function migrateOneTicket(
   if (DRY_RUN) {
     console.log(
       `  [dry-run] would import Zammad #${zTicket.number} → "${zTicket.title}" ` +
-        `(${customerEmail || "no-email"}, ${status}, ${commentRows.length} comments, ` +
-        `${stagedAttachments.length} attachments, ${tagNames.length} tags)`
+        `(${customerEmail || "no-email"}, ${status}, assignee: ${assignedAgentId ?? "none"}, ` +
+        `${commentRows.length} comments, ${stagedAttachments.length} attachments, ${tagNames.length} tags)`
     );
     // Roll back the files we uploaded while staging during a dry run.
     for (const a of stagedAttachments) {
@@ -623,6 +661,7 @@ async function migrateOneTicket(
         customerName,
         customerEmail: customerEmail || "unknown@migrated.local",
         customerToken: createId(),
+        assignedAgentId,
         source: "portal",
         awaitingReply: pending > 0,
         pendingReplies: pending,
@@ -665,20 +704,24 @@ async function migrateOneTicket(
         );
       }
 
-      // Idempotency marker + audit trail of where this ticket came from.
-      await tx.insert(ticketActivity).values({
-        id: createId(),
-        ticketId,
-        actorId: null,
-        actorName: "Zammad Migration",
-        actorRole: "system",
-        action: "zammad_migrated",
-        metadata: {
-          zammadTicketId: zTicket.id,
-          zammadNumber: zTicket.number,
+      // Reconstructed creation/reply activity trail (see activityRows above)
+      // + the idempotency marker + audit trail of where this ticket came from.
+      await tx.insert(ticketActivity).values([
+        ...activityRows,
+        {
+          id: createId(),
+          ticketId,
+          actorId: null,
+          actorName: "Zammad Migration",
+          actorRole: "system",
+          action: "zammad_migrated",
+          metadata: {
+            zammadTicketId: zTicket.id,
+            zammadNumber: zTicket.number,
+          },
+          createdAt,
         },
-        createdAt,
-      });
+      ]);
     });
   } catch (err) {
     // Insert failed — remove the files we already uploaded for this ticket.

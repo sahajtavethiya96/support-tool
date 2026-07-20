@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type { CustomFieldWithValue } from "@/lib/custom-fields";
 import type {
   TicketCategory,
   TicketPriority,
@@ -22,6 +23,7 @@ import type {
 import { COLOR_BADGE, formatTicketDateTime } from "@/lib/tickets";
 import { getInitials } from "@/lib/utils";
 import { SidebarCard } from "./sidebar-card";
+import { TicketCustomFields } from "./ticket-custom-fields";
 import { TicketTags } from "./ticket-tags";
 
 type Agent = { id: string; name: string | null; email: string };
@@ -40,6 +42,7 @@ interface Props {
   agents: Agent[];
   categories: TicketCategory[];
   currentUserId: string;
+  customFields: CustomFieldWithValue[];
   isAdmin?: boolean;
   priorities: TicketPriority[];
   statuses: TicketStatus[];
@@ -68,6 +71,7 @@ export function TicketInfoSidebar({
   categories,
   priorities,
   tags,
+  customFields,
   currentUserId,
   isAdmin = false,
 }: Props) {
@@ -109,6 +113,10 @@ export function TicketInfoSidebar({
     tag_removed: (a) => {
       const m = a.metadata as { tag?: string } | null;
       return `Tag removed${m?.tag ? `: ${m.tag}` : ""}`;
+    },
+    custom_field_changed: (a) => {
+      const m = a.metadata as { field?: string } | null;
+      return `${m?.field ?? "Custom field"} updated`;
     },
   };
   const router = useRouter();
@@ -367,6 +375,13 @@ export function TicketInfoSidebar({
       <SidebarCard title="Tags" {...accordionProps("tags")}>
         <TicketTags initialTags={tags} ticketId={ticket.id} />
       </SidebarCard>
+
+      {/* Custom Fields */}
+      {customFields.length > 0 && (
+        <SidebarCard title="Custom Fields" {...accordionProps("custom-fields")}>
+          <TicketCustomFields initialFields={customFields} ticketId={ticket.id} />
+        </SidebarCard>
+      )}
 
       {/* Customer Info */}
       <SidebarCard title="Customer" {...accordionProps("customer")}>

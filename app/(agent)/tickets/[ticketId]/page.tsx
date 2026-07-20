@@ -17,6 +17,7 @@ import {
 } from "@/db/schema/tickets";
 import { requireAgent } from "@/lib/authz";
 import { getCannedResponses } from "@/lib/canned-responses";
+import { getCustomFieldValues } from "@/lib/custom-fields";
 import { db } from "@/lib/db";
 import { isRichTextEmpty } from "@/lib/rich-text";
 import { storage } from "@/lib/storage";
@@ -63,13 +64,14 @@ export default async function AgentTicketDetailPage({ params }: Props) {
     notFound();
   }
 
-  const [statuses, categories, priorities, cannedResponses, tags] =
+  const [statuses, categories, priorities, cannedResponses, tags, customFields] =
     await Promise.all([
       getTicketStatuses(),
       getTicketCategories(),
       getTicketPriorities(),
       getCannedResponses(),
       getTicketTags(ticketId),
+      getCustomFieldValues(ticketId),
     ]);
 
   const statusMap = Object.fromEntries(statuses.map((s) => [s.slug, s]));
@@ -329,6 +331,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
             agents={agents}
             categories={categories}
             currentUserId={session.id}
+            customFields={customFields}
             isAdmin={session.role === ADMIN_ROLE}
             priorities={priorities}
             statuses={statuses}

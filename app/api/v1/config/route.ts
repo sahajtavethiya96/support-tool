@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { requireApiKey } from "@/lib/api-auth";
+import { getCustomFields } from "@/lib/custom-fields";
 import {
   getTicketCategories,
   getTicketPriorities,
@@ -20,10 +21,11 @@ export async function GET(request: NextRequest) {
     return e as Response;
   }
 
-  const [categories, priorities, statuses] = await Promise.all([
+  const [categories, priorities, statuses, customFields] = await Promise.all([
     getTicketCategories(),
     getTicketPriorities(),
     getTicketStatuses(),
+    getCustomFields(),
   ]);
 
   return NextResponse.json({
@@ -44,6 +46,13 @@ export async function GET(request: NextRequest) {
       color: s.color,
       isDefault: s.isDefault,
       isClosedState: s.isClosedState,
+    })),
+    customFields: customFields.map((f) => ({
+      key: f.key,
+      label: f.label,
+      type: f.type,
+      options: f.options ?? undefined,
+      required: f.required,
     })),
   });
 }

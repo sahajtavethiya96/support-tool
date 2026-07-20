@@ -2,6 +2,11 @@ import { createId } from "@paralleldrive/cuid2";
 import { and, eq, or } from "drizzle-orm";
 import { ADMIN_ROLE, AGENT_ROLE } from "@/config/platform";
 import { ticketActivity, ticketAttachments, tickets, user } from "@/db/schema";
+import {
+  getCustomFields,
+  setCustomFieldValues,
+  validateCustomFieldInput,
+} from "@/lib/custom-fields";
 import { db } from "@/lib/db";
 import { enqueueEmail } from "@/lib/email";
 import { ticketCreatedTemplate } from "@/lib/email/templates/ticket-created";
@@ -34,6 +39,9 @@ export interface TicketSubmission {
    * function only inserts the DB rows and rolls storage back on failure). */
   attachments?: TicketSubmissionAttachment[];
   category: string;
+  /** Optional `{ [field.key]: rawValue }` map — validated against the
+   * admin-defined custom fields (see lib/custom-fields.ts). */
+  customFields?: Record<string, unknown>;
   description: string;
   email: string;
   /** Pre-generated ticket id — needed by callers (the portal route) that
@@ -59,6 +67,7 @@ export type CreateTicketResult =
 
 interface ValidatedFields {
   category: string;
+  customFieldValues: Array<{ fieldId: string; value: string | null }>;
   description: string;
   email: string;
   name: string;
@@ -90,6 +99,7 @@ export async function validateTicketSubmission(input: {
   description: string;
   category: string;
   priority?: string;
+  customFields?: Record<string, unknown>;
 }): Promise<ValidationResult> {
   const name = input.name.trim();
   const email = input.email.trim();
@@ -127,12 +137,13 @@ export async function validateTicketSubmission(input: {
     };
   }
 
-  const [validCategories, validPriorities, defaultStatus, defaultPriority] =
+  const [validCategories, validPriorities, defaultStatus, defaultPriority, customFields] =
     await Promise.all([
       getTicketCategories(),
       getTicketPriorities(),
       getDefaultStatus(),
       getDefaultPriority(),
+      getCustomFields(),
     ]);
 
   if (!validCategories.some((c) => c.slug === category)) {
@@ -147,6 +158,20 @@ export async function validateTicketSubmission(input: {
     priority = input.priority;
   }
 
+  // `partial: true` when the caller never touched customFields at all (e.g.
+  // the customer portal, which has no UI for them) — required custom fields
+  // are only enforced when a caller actually sends a `customFields` object,
+  // so adding one later can't retroactively break the portal or existing
+  // API integrations that don't know about it.
+  const validatedCustomFields = validateCustomFieldInput(
+    customFields,
+    input.customFields,
+    { partial: input.customFields === undefined }
+  );
+  if (!validatedCustomFields.ok) {
+    return validatedCustomFields;
+  }
+
   return {
     ok: true,
     fields: {
@@ -157,6 +182,7 @@ export async function validateTicketSubmission(input: {
       category,
       priority,
       status: defaultStatus?.slug ?? "open",
+      customFieldValues: validatedCustomFields.values,
     },
   };
 }
@@ -175,8 +201,16 @@ export async function createTicketFromSubmission(
   if (!validated.ok) {
     return validated;
   }
-  const { name, email, subject, description, category, priority, status } =
-    validated.fields;
+  const {
+    name,
+    email,
+    subject,
+    description,
+    category,
+    priority,
+    status,
+    customFieldValues,
+  } = validated.fields;
 
   const ticketId = input.id ?? createId();
   const customerToken = createId();
@@ -205,6 +239,10 @@ export async function createTicketFromSubmission(
         updatedAt: now,
       })
       .returning({ ticketNumber: tickets.ticketNumber });
+
+    if (customFieldValues.length > 0) {
+      await setCustomFieldValues(ticketId, customFieldValues);
+    }
 
     if (attachments.length > 0) {
       await db.insert(ticketAttachments).values(

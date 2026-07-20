@@ -138,6 +138,14 @@ export function buildOpenApiSpec(baseUrl: string): Record<string, unknown> {
                         isClosedState: false,
                       },
                     ],
+                    customFields: [
+                      {
+                        key: "order_id",
+                        label: "Order ID",
+                        type: "text",
+                        required: false,
+                      },
+                    ],
                   },
                 },
               },
@@ -467,6 +475,13 @@ export function buildOpenApiSpec(baseUrl: string): Record<string, unknown> {
               description:
                 "Optional priority slug from `GET /api/v1/config`. Falls back to the platform's default priority when omitted.",
             },
+            customFields: {
+              type: "object",
+              description:
+                "`{ \"<key>\": <value> }` map for admin-defined custom fields (see `GET /api/v1/config`'s `customFields`). Required fields are only enforced if this object is included at all — omit it entirely to skip custom fields, so adding a required one later can't break an integration that never sends it.",
+              additionalProperties: true,
+              examples: [{ order_id: "A-1042", plan: "Pro" }],
+            },
           },
         },
         CreateTicketResponse: {
@@ -518,7 +533,7 @@ export function buildOpenApiSpec(baseUrl: string): Record<string, unknown> {
         },
         Config: {
           type: "object",
-          required: ["categories", "priorities", "statuses"],
+          required: ["categories", "priorities", "statuses", "customFields"],
           properties: {
             categories: {
               type: "array",
@@ -576,6 +591,33 @@ export function buildOpenApiSpec(baseUrl: string): Record<string, unknown> {
                     description:
                       "Whether this status counts as closed/resolved.",
                   },
+                },
+              },
+            },
+            customFields: {
+              type: "array",
+              description:
+                "Admin-defined custom fields, in display order (empty if none configured). Send matching values in `POST /api/v1/tickets`'s `customFields`.",
+              items: {
+                type: "object",
+                required: ["key", "label", "type", "required"],
+                properties: {
+                  key: {
+                    type: "string",
+                    description: "Stable machine key — the JSON key to send.",
+                    examples: ["order_id"],
+                  },
+                  label: { type: "string", examples: ["Order ID"] },
+                  type: {
+                    type: "string",
+                    enum: ["text", "number", "date", "checkbox", "select"],
+                  },
+                  options: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Only present when `type` is `select`.",
+                  },
+                  required: { type: "boolean" },
                 },
               },
             },
