@@ -5,6 +5,7 @@ import {
   type EmailTemplateType,
   setEmailTemplate,
 } from "@/lib/email-templates";
+import { audit } from "@/lib/audit";
 import { requireAdminFromRequest } from "@/lib/authz";
 
 function isValidType(type: string): type is EmailTemplateType {
@@ -19,8 +20,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ type: string }> }
 ) {
+  let admin;
   try {
-    requireAdminFromRequest(request);
+    admin = requireAdminFromRequest(request);
   } catch (e) {
     return e as Response;
   }
@@ -53,6 +55,19 @@ export async function PATCH(
   const row = await setEmailTemplate(type, {
     subject,
     body: bodyField,
+  });
+
+  await audit({
+    action: "email_template.updated",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: `Updated the "${type}" email template`,
+    entityId: type,
+    entityType: "email_template",
+    metadata: {
+      subjectReset: subject === null,
+      bodyReset: bodyField === null,
+    },
   });
 
   return NextResponse.json(row);

@@ -24,12 +24,15 @@ Below is the decision made per item and where its plan lives.
 | 7 | Canned / saved replies | **Build** | [05-canned-responses.md](./05-canned-responses.md) |
 | 8 | Ticket priority | **Build** | [06-ticket-priority.md](./06-ticket-priority.md) |
 | 9 | Audit-log / activity viewer | **Build** | [07-audit-log-viewer.md](./07-audit-log-viewer.md) |
-| 10 | CSAT + CSV export | **Deferred** — revisit later, no plan yet | — |
+| 10 | CSAT + CSV export | **Split** — CSAT still deferred, no plan yet. CSV export was built as part of the manager reports feature (item 17) — a raw per-ticket CSV export of the ticket list itself is not built | — |
 | 11 | `/api/health` endpoint | **Deferred** — revisit later, no plan yet | — |
 | 12 | Email/password login + per-method sign-in toggles | **Built** — see `docs/authentication.md` § 2 | — |
 | 13 | Password reset (self-service + admin-initiated) | **Built** (self-service; also reused to fix the admin-invite flow, which previously created accounts with no way to sign in) — admin-initiated reset for an already-existing user is still deferred, see `docs/authentication.md` § 2 | [08-password-reset.md](./08-password-reset.md) |
 | 14 | Open-source readiness (LICENSE, `package.json` metadata, CI, templates) | **Deferred** — prioritized functionality first | [09-open-source-readiness.md](./09-open-source-readiness.md) |
 | 15 | Real-time ticket list + live ticket detail updates | **Build** — Pusher Channels, no polling fallback (explicit decision) | [10-realtime-updates.md](./10-realtime-updates.md) |
+| 16 | Public API (`/api/v1`) | **Build** | [11-public-api.md](./11-public-api.md) |
+| 17 | SLA tracking (First/Next Response, Resolution) | **Build** — policies scoped by priority/category, live pause/resume on `awaitingReply` | [12-sla.md](./12-sla.md) |
+| 18 | Manager reports (tickets/response-time per agent, category/priority/tag breakdowns, CSV export) | **Build** — admin-only `/admin/reports`, reuses the SLA columns for response/resolution time | [13-reports.md](./13-reports.md) |
 
 ### A note on #1 — "already implemented"?
 

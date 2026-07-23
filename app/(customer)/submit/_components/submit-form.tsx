@@ -14,10 +14,16 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { BrandMark } from "@/components/common/brand-mark";
 import { RichTextEditor } from "@/components/common/rich-text-editor";
-import { SearchableSelect } from "@/components/common/searchable-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { richTextToPlainText } from "@/lib/rich-text";
 import { cn } from "@/lib/utils";
 
@@ -368,21 +374,25 @@ export function SubmitForm({ brandName, logoUrl }: Props) {
               <Label className="text-bark text-sm font-medium">
                 Category <span className="text-red-600">*</span>
               </Label>
-              <SearchableSelect
+              <Select
                 disabled={submitting}
                 onValueChange={(v) => {
                   setCategory(v);
                   clearError("category");
                 }}
-                options={CATEGORIES.map((c) => ({
-                  value: c.value,
-                  label: c.label,
-                }))}
-                placeholder="Select a category"
-                searchPlaceholder="Search category…"
-                triggerClassName="h-11 w-full"
                 value={category}
-              />
+              >
+                <SelectTrigger className="h-11 w-full">
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {errors.category && (
                 <p className="text-xs text-red-600">{errors.category}</p>
               )}

@@ -1,10 +1,17 @@
-// Human-readable labels for the fixed set of audit action slugs currently
-// written by lib/audit.ts call sites. Update this list whenever a new
-// `audit({ action: "..." })` call site is added elsewhere in the codebase.
+// Human-readable labels for known audit action slugs, used purely for
+// display (getAuditActionLabel falls back to the raw slug for anything not
+// listed here, so a missing entry never breaks the filter — see
+// audit-log-filters.tsx, whose dropdown options come from a live `SELECT
+// DISTINCT action` in page.tsx, not this list). Still worth keeping in sync
+// for readability whenever a new `audit({ action: "..." })` call site is
+// added elsewhere in the codebase.
 export const AUDIT_ACTIONS: { label: string; value: string }[] = [
   { label: "Logout", value: "auth.logout" },
   { label: "Magic Link Sent", value: "auth.magic_link_sent" },
-  { label: "Role Updated", value: "orbit.user_role_updated" },
+  { label: "Password Reset Requested", value: "auth.password_reset_requested" },
+  { label: "Role Updated (Orbit)", value: "orbit.user_role_updated" },
+  { label: "User Banned (Orbit)", value: "orbit.user_banned" },
+  { label: "User Unbanned (Orbit)", value: "orbit.user_unbanned" },
   { label: "Name Updated", value: "profile.name_updated" },
   { label: "Email Updated", value: "profile.email_updated" },
   { label: "Session Revoked", value: "profile.session_revoked" },
@@ -12,6 +19,12 @@ export const AUDIT_ACTIONS: { label: string; value: string }[] = [
   { label: "Account Deleted", value: "profile.account_deleted" },
   { label: "Data Exported", value: "profile.data_exported" },
   { label: "User Created", value: "user.created" },
+  { label: "User Role Updated", value: "user.role_updated" },
+  { label: "User Banned", value: "user.banned" },
+  { label: "User Unbanned", value: "user.unbanned" },
+  { label: "User Deleted", value: "user.deleted" },
+  { label: "Password Set by Admin", value: "user.password_set_by_admin" },
+  { label: "Ticket Deleted", value: "ticket.deleted" },
   { label: "Bulk Update", value: "ticket.bulk_update" },
   { label: "Bulk Delete", value: "ticket.bulk_delete" },
   { label: "Canned Response Deleted", value: "canned_response.deleted" },
@@ -19,6 +32,25 @@ export const AUDIT_ACTIONS: { label: string; value: string }[] = [
   { label: "Webhook Updated", value: "webhook.updated" },
   { label: "Webhook Deleted", value: "webhook.deleted" },
   { label: "Webhook Secret Rotated", value: "webhook.secret_rotated" },
+  { label: "Status Created", value: "ticket_config.status_created" },
+  { label: "Status Updated", value: "ticket_config.status_updated" },
+  { label: "Status Deleted", value: "ticket_config.status_deleted" },
+  { label: "Category Created", value: "ticket_config.category_created" },
+  { label: "Category Updated", value: "ticket_config.category_updated" },
+  { label: "Category Deleted", value: "ticket_config.category_deleted" },
+  { label: "Priority Created", value: "ticket_config.priority_created" },
+  { label: "Priority Updated", value: "ticket_config.priority_updated" },
+  { label: "Priority Deleted", value: "ticket_config.priority_deleted" },
+  { label: "SLA Policy Created", value: "sla_policy.created" },
+  { label: "SLA Policy Updated", value: "sla_policy.updated" },
+  { label: "SLA Policy Deleted", value: "sla_policy.deleted" },
+  { label: "Custom Field Created", value: "custom_field.created" },
+  { label: "Custom Field Updated", value: "custom_field.updated" },
+  { label: "Custom Field Deleted", value: "custom_field.deleted" },
+  { label: "Email Template Updated", value: "email_template.updated" },
+  { label: "Platform Settings Updated", value: "settings.updated" },
+  { label: "API Key Created", value: "api_key.created" },
+  { label: "API Key Revoked", value: "api_key.revoked" },
 ];
 
 const AUDIT_ACTION_LABEL_MAP: Record<string, string> = Object.fromEntries(

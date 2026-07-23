@@ -74,13 +74,15 @@ export async function updateApiKey(
   return row;
 }
 
-export async function revokeApiKey(id: string): Promise<boolean> {
+export async function revokeApiKey(
+  id: string
+): Promise<{ id: string; name: string; keyPrefix: string } | null> {
   const [row] = await db
     .update(apiKeys)
     .set({ revokedAt: new Date() })
     .where(and(eq(apiKeys.id, id), isNull(apiKeys.revokedAt)))
-    .returning({ id: apiKeys.id });
-  return Boolean(row);
+    .returning({ id: apiKeys.id, name: apiKeys.name, keyPrefix: apiKeys.keyPrefix });
+  return row ?? null;
 }
 
 /** Looks up an active (non-revoked) key by its raw secret. Updates

@@ -2,6 +2,7 @@ import { count, eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { ticketPriorities, tickets } from "@/db/schema";
+import { audit } from "@/lib/audit";
 import { requireAdminFromRequest } from "@/lib/authz";
 import { db } from "@/lib/db";
 
@@ -10,8 +11,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let admin;
   try {
-    requireAdminFromRequest(request);
+    admin = requireAdminFromRequest(request);
   } catch (e) {
     return e as Response;
   }
@@ -76,6 +78,16 @@ export async function PATCH(
     .where(eq(ticketPriorities.id, id))
     .returning();
 
+  await audit({
+    action: "ticket_config.priority_updated",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: `Updated priority "${existing.label}"`,
+    entityId: id,
+    entityType: "ticket_priority",
+    metadata: { slug: existing.slug, changes: body },
+  });
+
   return NextResponse.json(updated);
 }
 
@@ -84,8 +96,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let admin;
   try {
-    requireAdminFromRequest(request);
+    admin = requireAdminFromRequest(request);
   } catch (e) {
     return e as Response;
   }
@@ -136,5 +149,16 @@ export async function DELETE(
   }
 
   await db.delete(ticketPriorities).where(eq(ticketPriorities.id, id));
+
+  await audit({
+    action: "ticket_config.priority_deleted",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: `Deleted priority "${existing.label}"`,
+    entityId: id,
+    entityType: "ticket_priority",
+    metadata: { slug: existing.slug, label: existing.label },
+  });
+
   return NextResponse.json({ ok: true });
 }

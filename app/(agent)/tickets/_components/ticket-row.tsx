@@ -15,6 +15,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { SlaMetricBadge, SlaWaitBadge, pickMostUrgentMetric } from "@/components/common/sla-badge";
+import type { SlaSnapshot } from "@/lib/sla";
 import type { TicketPriority, TicketStatus } from "@/lib/ticket-config";
 import { COLOR_BADGE, formatTicketDate } from "@/lib/tickets";
 import type { ColumnPref } from "@/lib/tickets-table-columns";
@@ -26,6 +35,7 @@ interface Row {
   customerName: string;
   id: string;
   priority: string;
+  slaSnapshot: SlaSnapshot;
   status: string;
   subject: string;
   tags: string[];
@@ -49,6 +59,10 @@ interface Props {
   agents: Agent[];
   categoryMap: Record<string, ColorRow | undefined>;
   isAdmin: boolean;
+  /** Current filter/sort/page query string — appended to this row's ticket
+   * link so the detail page's Previous/Next buttons stay within this same
+   * filtered result set. */
+  listQuery: string;
   onToggleSelect: () => void;
   priorities: TicketPriority[];
   priorityMap: Record<string, ColorRow | undefined>;
@@ -71,6 +85,7 @@ export function TicketRow({
   selected,
   onToggleSelect,
   visibleColumns,
+  listQuery,
 }: Props) {
   const router = useRouter();
   const [status, setStatus] = useState(row.status);
@@ -165,15 +180,24 @@ export function TicketRow({
     switch (columnId) {
       case "status":
         return (
-          <SearchableSelect
-            compact
+          <Select
             disabled={loading}
             onValueChange={handleStatusChange}
-            options={statuses.map((s) => ({ value: s.slug, label: s.label }))}
-            searchPlaceholder="Search status…"
-            triggerClassName={`h-7 w-full text-xs border ${COLOR_BADGE[statusMap[status]?.color ?? "slate"] ?? "border-border"}`}
             value={status}
-          />
+          >
+            <SelectTrigger
+              className={`h-7 w-full text-xs border ${COLOR_BADGE[statusMap[status]?.color ?? "slate"] ?? "border-border"}`}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {statuses.map((s) => (
+                <SelectItem key={s.slug} value={s.slug}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         );
       case "category":
         return (
@@ -185,19 +209,34 @@ export function TicketRow({
         );
       case "priority":
         return (
-          <SearchableSelect
-            compact
+          <Select
             disabled={loading}
             onValueChange={handlePriorityChange}
-            options={priorities.map((p) => ({
-              value: p.slug,
-              label: p.label,
-            }))}
-            searchPlaceholder="Search priority…"
-            triggerClassName={`h-7 w-full text-xs border ${COLOR_BADGE[priorityMap[priority]?.color ?? "slate"] ?? "border-border"}`}
             value={priority}
-          />
+          >
+            <SelectTrigger
+              className={`h-7 w-full text-xs border ${COLOR_BADGE[priorityMap[priority]?.color ?? "slate"] ?? "border-border"}`}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {priorities.map((p) => (
+                <SelectItem key={p.slug} value={p.slug}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         );
+      case "sla": {
+        const urgent = pickMostUrgentMetric(row.slaSnapshot, Date.now());
+        return (
+          <div className="space-y-1">
+            <SlaWaitBadge compact snapshot={row.slaSnapshot} />
+            {urgent && <SlaMetricBadge metric={urgent} />}
+          </div>
+        );
+      }
       case "customer":
         return (
           <span
@@ -277,7 +316,7 @@ export function TicketRow({
         <td className="px-4 py-3">
           <Link
             className="text-[13px] font-medium text-foreground hover:underline line-clamp-2"
-            href={`/tickets/${row.id}`}
+            href={`/tickets/${row.id}${listQuery}`}
             title={row.subject}
           >
             {row.subject}

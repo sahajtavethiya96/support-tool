@@ -102,7 +102,7 @@ Google's toggle only controls whether the *configured* provider is offered — t
 - Hashed and stored by Better Auth in the `account` table (`provider_id = 'credential'`) — the app never handles raw password hashing itself.
 - `requireEmailVerification` is off — self-hosted installs may not have SMTP configured, so password sign-in must not depend on receiving an email.
 - **Self-service reset:** `/forgot-password` → email + Better Auth's `sendResetPassword` (`lib/auth.ts`) sends a link via `resetPasswordTemplate` → `/reset-password?token=...` sets a new password. Same generic-success-message anti-enumeration pattern as magic link. Reset link expires in **1 hour**, single-use (Better Auth's `verification` table). Blocked entirely (`403`) if `passwordLoginEnabled` is off — there's nothing to reset into.
-- No admin-initiated reset yet (an admin setting a new password for a locked-out user directly) — for now, re-invite or re-run `pnpm create:admin` for a new account.
+- **Admin-initiated reset:** an admin can directly set a new password for any user from **`/admin/users`** ("Reset Password") — no old password required, no email sent. Backed by Better Auth's admin plugin (`auth.api.setUserPassword`, `PATCH /api/users/[id]` with `{ password }`). Hidden when `passwordLoginEnabled` is off (nothing to reset into). Logged via `user.password_set_by_admin` in the audit log.
 
 ### Inviting a New Agent/Admin
 
@@ -277,7 +277,6 @@ platform_settings (db/schema/settings.ts — not a Better Auth table)
 
 ## Out of Scope (MVP)
 
-- Admin-initiated password reset (an admin directly setting a new password for a locked-out user) — self-service reset and invite-driven password setup are both built; see § 2
 - Public self-registration for any method (accounts are always script- or admin-created)
 - Customer accounts with passwords
 - 2FA / TOTP

@@ -6,9 +6,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SearchableSelect } from "@/components/common/searchable-select";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { AUDIT_ACTIONS } from "./audit-log-actions";
+import { getAuditActionLabel } from "./audit-log-actions";
 
-export function AuditLogFilters() {
+interface Props {
+  /** Distinct action values actually present in audit_logs (see page.tsx) —
+   * not a hand-maintained list, so this never misses an action type. */
+  actions: string[];
+}
+
+export function AuditLogFilters({ actions }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [q, setQ] = useState(searchParams.get("q") ?? "");
@@ -72,7 +78,10 @@ export function AuditLogFilters() {
 
       <SearchableSelect
         onValueChange={(v) => updateParams({ action: v })}
-        options={[{ value: "all", label: "All Actions" }, ...AUDIT_ACTIONS]}
+        options={[
+          { value: "all", label: "All Actions" },
+          ...actions.map((a) => ({ value: a, label: getAuditActionLabel(a) })),
+        ]}
         placeholder="All Actions"
         searchPlaceholder="Search action…"
         triggerClassName="w-56"

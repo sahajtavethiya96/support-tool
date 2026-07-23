@@ -24,6 +24,7 @@ interface Props {
   userRole: string;
   userBanned: boolean;
   isCurrentUser: boolean;
+  passwordResetEnabled: boolean;
 }
 
 export function UserActions({
@@ -33,6 +34,7 @@ export function UserActions({
   userRole,
   userBanned,
   isCurrentUser,
+  passwordResetEnabled,
 }: Props) {
   const router = useRouter();
 
@@ -53,6 +55,13 @@ export function UserActions({
   const [deleteEmail, setDeleteEmail] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Reset password dialog
+  const [resetOpen, setResetOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   async function handleRoleChange() {
     if (selectedRole === userRole) { setRoleOpen(false); return; }
@@ -164,6 +173,43 @@ export function UserActions({
     }
   }
 
+  async function handleResetPassword() {
+    if (newPassword.length < 8) {
+      setResetError("Password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setResetError("Passwords do not match.");
+      return;
+    }
+    setResetLoading(true);
+    setResetError(null);
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: newPassword }),
+      });
+      if (!res.ok) {
+        const d = (await res.json()) as { error?: string };
+        const msg = d.error ?? "Failed to reset password.";
+        setResetError(msg);
+        toast.error(msg);
+        return;
+      }
+      setResetOpen(false);
+      setNewPassword("");
+      setConfirmPassword("");
+      toast.success(`Password reset for ${userName}.`);
+      router.refresh();
+    } catch {
+      setResetError("Network error.");
+      toast.error("Network error.");
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
   return (
     <>
       <div className="flex items-center gap-1.5">
@@ -175,6 +221,22 @@ export function UserActions({
         >
           Change Role
         </Button>
+
+        {passwordResetEnabled && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 px-2.5 text-xs border-border text-foreground hover:bg-accent"
+            onClick={() => {
+              setNewPassword("");
+              setConfirmPassword("");
+              setResetError(null);
+              setResetOpen(true);
+            }}
+          >
+            Reset Password
+          </Button>
+        )}
 
         {userBanned ? (
           <Button
@@ -348,6 +410,58 @@ export function UserActions({
               disabled={deleteLoading || deleteEmail !== userEmail}
             >
               {deleteLoading ? "Deleting…" : "Delete User"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        <DialogContent className="rounded-xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Reset Password</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Set a new password for <strong className="text-foreground">{userName}</strong>. They will not be notified — share the new password with them yourself.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">New password</Label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="At least 8 characters"
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Confirm password</Label>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter password"
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+          {resetError && <p className="text-xs text-red-600">{resetError}</p>}
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              className="border-border text-foreground"
+              onClick={() => setResetOpen(false)}
+              disabled={resetLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              onClick={handleResetPassword}
+              disabled={resetLoading || newPassword.length < 8 || newPassword !== confirmPassword}
+            >
+              {resetLoading ? "Saving…" : "Reset Password"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { tickets } from "@/db/schema";
+import { customers, tickets } from "@/db/schema";
 import { signEmailToken } from "@/lib/customer-access";
 import { db } from "@/lib/db";
 import { enqueueEmail } from "@/lib/email";
@@ -45,17 +45,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Fetch non-closed tickets for this email
-  const customerTickets = await db
-    .select({
-      id: tickets.id,
-      ticketNumber: tickets.ticketNumber,
-      subject: tickets.subject,
-      status: tickets.status,
-      customerToken: tickets.customerToken,
-    })
-    .from(tickets)
-    .where(eq(tickets.customerEmail, email));
+  // Fetch tickets for this email
+  const [customer] = await db
+    .select({ id: customers.id })
+    .from(customers)
+    .where(eq(customers.email, email))
+    .limit(1);
+  const customerTickets = customer
+    ? await db
+        .select({
+          id: tickets.id,
+          ticketNumber: tickets.ticketNumber,
+          subject: tickets.subject,
+          status: tickets.status,
+          customerToken: tickets.customerToken,
+        })
+        .from(tickets)
+        .where(eq(tickets.customerId, customer.id))
+    : [];
 
   // Always respond the same way regardless of whether tickets exist — only
   // send an email when there's something to show (prevents email enumeration).

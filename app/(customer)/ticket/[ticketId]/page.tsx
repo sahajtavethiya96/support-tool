@@ -11,6 +11,7 @@ import { LocalDateTime } from "@/components/common/local-datetime";
 import { RichTextContent } from "@/components/common/rich-text-content";
 import { TicketAttachments } from "@/components/common/ticket-attachments";
 import {
+  customers,
   ticketActivity,
   ticketAttachments,
   ticketComments,
@@ -50,8 +51,23 @@ export default async function TicketDetailPage({
 
   // Validate ticket + token together
   const [ticket] = await db
-    .select()
+    .select({
+      id: tickets.id,
+      ticketNumber: tickets.ticketNumber,
+      subject: tickets.subject,
+      description: tickets.description,
+      category: tickets.category,
+      status: tickets.status,
+      priority: tickets.priority,
+      customerId: tickets.customerId,
+      customerName: customers.name,
+      customerEmail: customers.email,
+      customerToken: tickets.customerToken,
+      createdAt: tickets.createdAt,
+      updatedAt: tickets.updatedAt,
+    })
     .from(tickets)
+    .innerJoin(customers, eq(tickets.customerId, customers.id))
     .where(and(eq(tickets.id, ticketId), eq(tickets.customerToken, token)))
     .limit(1);
 
@@ -82,7 +98,7 @@ export default async function TicketDetailPage({
       customerToken: tickets.customerToken,
     })
     .from(tickets)
-    .where(eq(tickets.customerEmail, ticket.customerEmail))
+    .where(eq(tickets.customerId, ticket.customerId))
     .orderBy(desc(tickets.createdAt));
 
   const openTickets = siblingTickets.filter(

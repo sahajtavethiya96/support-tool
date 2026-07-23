@@ -206,14 +206,23 @@ Two features were added that were not in the initial phases:
 - **In-app notifications** — agents get a notification-bell alert when a customer replies
   (assigned agent, or all agents if unassigned). See `docs/in-app-notifications.md`.
   Agents are no longer emailed for customer replies.
+- **SLA tracking** — admins configure First/Next Response and Resolution targets at
+  `/admin/ticket-config` (globally or scoped by priority/category); agents see live,
+  color-coded countdowns on the ticket list and detail page, with the clock
+  automatically pausing while waiting on the customer. See `docs/plans/12-sla.md`.
+- **Manager reports** — admin-only `/admin/reports`: tickets per agent (with avg
+  first-response/resolution time), breakdowns by category/priority/tag, and a CSV
+  download per report. See `docs/plans/13-reports.md`.
 
 ### Remaining / nice-to-have
 
 - One-click deploy templates (Railway/Render/Fly) — documented generically in the README,
   but no provider button/manifest files yet.
 - Broader mobile-responsiveness pass on the agent ticket detail two-column layout.
-- CSAT (post-close satisfaction rating) and a CSV export of tickets — deferred,
-  no implementation plan written yet.
+- CSAT (post-close satisfaction rating) — deferred, no implementation plan
+  written yet. (A CSV export now exists for the `/admin/reports` aggregate
+  reports — see `docs/plans/13-reports.md` — but a raw per-ticket CSV export
+  of the ticket list itself is still not built.)
 - `GET /api/health` endpoint for Docker healthchecks / uptime monitors — deferred,
   no implementation plan written yet.
 
@@ -223,5 +232,6 @@ See [docs/plans/](./plans/00-overview.md) for the full write-up of each item.
 Completed: the "My Tickets" list email (was a stub), Postgres-backed rate
 limiting on public routes, deleting the unused `GET /api/tickets` stub,
 bulk ticket actions, attachment deletion, canned/saved replies, ticket
-priority, and the audit-log viewer (`/admin/audit-log`). Inbound
-email-to-ticket was considered and intentionally skipped for now.
+priority, the audit-log viewer (`/admin/audit-log`), SLA tracking, and
+manager reports (`/admin/reports`). Inbound email-to-ticket was considered
+and intentionally skipped for now.

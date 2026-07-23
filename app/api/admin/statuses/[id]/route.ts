@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { ticketStatuses, tickets } from "@/db/schema";
+import { audit } from "@/lib/audit";
 import { requireAdminFromRequest } from "@/lib/authz";
 
 // PATCH — admin only
@@ -10,7 +11,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try { requireAdminFromRequest(request); } catch (e) { return e as Response; }
+  let admin;
+  try { admin = requireAdminFromRequest(request); } catch (e) { return e as Response; }
 
   const { id } = await params;
 
@@ -59,6 +61,16 @@ export async function PATCH(
     .where(eq(ticketStatuses.id, id))
     .returning();
 
+  await audit({
+    action: "ticket_config.status_updated",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: `Updated status "${existing.label}"`,
+    entityId: id,
+    entityType: "ticket_status",
+    metadata: { slug: existing.slug, changes: body },
+  });
+
   return NextResponse.json(updated);
 }
 
@@ -67,7 +79,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try { requireAdminFromRequest(request); } catch (e) { return e as Response; }
+  let admin;
+  try { admin = requireAdminFromRequest(request); } catch (e) { return e as Response; }
 
   const { id } = await params;
 
@@ -110,5 +123,16 @@ export async function DELETE(
   }
 
   await db.delete(ticketStatuses).where(eq(ticketStatuses.id, id));
+
+  await audit({
+    action: "ticket_config.status_deleted",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: `Deleted status "${existing.label}"`,
+    entityId: id,
+    entityType: "ticket_status",
+    metadata: { slug: existing.slug, label: existing.label },
+  });
+
   return NextResponse.json({ ok: true });
 }

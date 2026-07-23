@@ -3,6 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { ticketPriorities } from "@/db/schema";
+import { audit } from "@/lib/audit";
 import { requireAdminFromRequest } from "@/lib/authz";
 import { db } from "@/lib/db";
 
@@ -25,8 +26,9 @@ export async function GET(_request: NextRequest) {
 
 // POST — admin only
 export async function POST(request: NextRequest) {
+  let admin;
   try {
-    requireAdminFromRequest(request);
+    admin = requireAdminFromRequest(request);
   } catch (e) {
     return e as Response;
   }
@@ -100,6 +102,16 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     })
     .returning();
+
+  await audit({
+    action: "ticket_config.priority_created",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: `Created priority "${label}"`,
+    entityId: inserted.id,
+    entityType: "ticket_priority",
+    metadata: { slug, label, color, isDefault },
+  });
 
   return NextResponse.json(inserted, { status: 201 });
 }

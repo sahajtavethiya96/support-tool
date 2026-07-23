@@ -2,12 +2,13 @@ import { createId } from "@paralleldrive/cuid2";
 import { and, eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { ticketActivity, tickets } from "@/db/schema";
+import { customers, ticketActivity, tickets } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { enqueueEmail } from "@/lib/email";
 import { ticketClosedTemplate } from "@/lib/email/templates/ticket-closed";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { computeSlaTransition } from "@/lib/sla";
 import { getClosedStatus, isClosedStatusSlug } from "@/lib/ticket-config";
 import { notifyTicketStatusChange } from "@/lib/tickets/notify-status-change";
 import { resolveTicketPortalUrl } from "@/lib/tickets/portal-url";
@@ -28,7 +29,7 @@ export async function PATCH(
   const now = new Date();
 
   // Determine actor
-  let actorName: string;
+  let actorName: string | undefined;
   let actorRole: string;
   let actorId: string | undefined;
 
@@ -68,12 +69,10 @@ export async function PATCH(
         and(eq(tickets.id, ticketId), eq(tickets.customerToken, body.token))
       )
       .limit(1);
-    if (ticket) {
-      actorName = ticket.customerName;
-      actorRole = "customer";
-    } else {
+    if (!ticket) {
       return NextResponse.json({ error: "Ticket not found." }, { status: 404 });
     }
+    actorRole = "customer";
   } else {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
@@ -81,6 +80,19 @@ export async function PATCH(
   if (!ticket) {
     return NextResponse.json({ error: "Ticket not found." }, { status: 404 });
   }
+
+  const [customer] = await db
+    .select({ name: customers.name, email: customers.email })
+    .from(customers)
+    .where(eq(customers.id, ticket.customerId))
+    .limit(1);
+  if (!customer) {
+    return NextResponse.json({ error: "Ticket not found." }, { status: 404 });
+  }
+  if (!actorName) {
+    actorName = customer.name;
+  }
+
   if (await isClosedStatusSlug(ticket.status)) {
     return NextResponse.json(
       { error: "Ticket is already closed." },
@@ -98,15 +110,24 @@ export async function PATCH(
 
   const previousStatus = ticket.status;
 
+  // Closing resolves the ticket — it's no longer awaiting a reply, and the
+  // SLA resolution clock stops (flushing any in-progress active span first).
+  const slaUpdate = computeSlaTransition(
+    { awaitingReply: ticket.awaitingReply, waitingSince: ticket.waitingSince },
+    false,
+    now,
+    "closing"
+  );
+
   await db
     .update(tickets)
-    // Closing resolves the ticket — it's no longer awaiting a reply.
     .set({
       status: closedStatus.slug,
       closedAt: now,
       updatedAt: now,
       awaitingReply: false,
       pendingReplies: 0,
+      ...slaUpdate,
     })
     .where(eq(tickets.id, ticketId));
 
@@ -130,8 +151,8 @@ export async function PATCH(
       status: closedStatus.slug,
       priority: ticket.priority,
       category: ticket.category,
-      customerName: ticket.customerName,
-      customerEmail: ticket.customerEmail,
+      customerName: customer.name,
+      customerEmail: customer.email,
       createdAt: ticket.createdAt,
       updatedAt: now,
     },
@@ -146,14 +167,14 @@ export async function PATCH(
     ticket.apiKeyId
   );
   ticketClosedTemplate({
-    customerName: ticket.customerName,
+    customerName: customer.name,
     ticketNumber: ticket.ticketNumber,
     ticketSubject: ticket.subject,
     ticketUrl,
   })
     .then(({ subject: emailSubject, html, text }) =>
       enqueueEmail({
-        to: ticket.customerEmail,
+        to: customer.email,
         subject: emailSubject,
         html,
         text,

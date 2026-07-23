@@ -20,6 +20,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type {
   TicketCategory,
@@ -260,60 +267,66 @@ export function TicketFilters({
                 <span className="text-xs font-medium text-muted-foreground">
                   Status
                 </span>
-                <SearchableSelect
+                <Select
                   onValueChange={(v) => updateParams({ status: v })}
-                  options={[
-                    { value: "all", label: "All Statuses" },
-                    ...statuses.map((s) => ({
-                      value: s.slug,
-                      label: s.label,
-                    })),
-                  ]}
-                  placeholder="All Statuses"
-                  searchPlaceholder="Search status…"
-                  triggerClassName="w-full"
                   value={status}
-                />
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    {statuses.map((s) => (
+                      <SelectItem key={s.slug} value={s.slug}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-1.5">
                 <span className="text-xs font-medium text-muted-foreground">
                   Category
                 </span>
-                <SearchableSelect
+                <Select
                   onValueChange={(v) => updateParams({ category: v })}
-                  options={[
-                    { value: "all", label: "All Categories" },
-                    ...categories.map((c) => ({
-                      value: c.slug,
-                      label: c.label,
-                    })),
-                  ]}
-                  placeholder="All Categories"
-                  searchPlaceholder="Search category…"
-                  triggerClassName="w-full"
                   value={category}
-                />
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c.slug} value={c.slug}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-1.5">
                 <span className="text-xs font-medium text-muted-foreground">
                   Priority
                 </span>
-                <SearchableSelect
+                <Select
                   onValueChange={(v) => updateParams({ priority: v })}
-                  options={[
-                    { value: "all", label: "All Priorities" },
-                    ...priorities.map((p) => ({
-                      value: p.slug,
-                      label: p.label,
-                    })),
-                  ]}
-                  placeholder="All Priorities"
-                  searchPlaceholder="Search priority…"
-                  triggerClassName="w-full"
                   value={priority}
-                />
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Priorities" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Priorities</SelectItem>
+                    {priorities.map((p) => (
+                      <SelectItem key={p.slug} value={p.slug}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-1.5">

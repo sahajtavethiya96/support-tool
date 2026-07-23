@@ -21,11 +21,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { SlaSnapshot } from "@/lib/sla";
 import type { TicketPriority, TicketStatus } from "@/lib/ticket-config";
 import {
   type ColumnPref,
   CUSTOMIZABLE_COLUMNS,
 } from "@/lib/tickets-table-columns";
+import { BulkTagSelect } from "./bulk-tag-select";
 import { TicketRow } from "./ticket-row";
 
 interface Row {
@@ -35,6 +44,7 @@ interface Row {
   customerName: string;
   id: string;
   priority: string;
+  slaSnapshot: SlaSnapshot;
   status: string;
   subject: string;
   tags: string[];
@@ -85,6 +95,7 @@ export function TicketsTable({
   agents,
   isAdmin,
   columnPrefs,
+  listQuery,
 }: {
   rows: Row[];
   statusMap: Record<string, ColorRow | undefined>;
@@ -95,6 +106,10 @@ export function TicketsTable({
   agents: Agent[];
   isAdmin: boolean;
   columnPrefs: ColumnPref[];
+  /** Current filter/sort/page query string (e.g. "?status=open&sort=id") —
+   * carried onto each row's ticket link so the detail page's Previous/Next
+   * buttons can traverse this same filtered result set. */
+  listQuery: string;
 }) {
   const visibleColumns = columnPrefs.filter((c) => c.visible);
   const router = useRouter();
@@ -226,14 +241,41 @@ export function TicketsTable({
               triggerClassName="h-9 w-44"
               value=""
             />
-            <SearchableSelect
+            <Select
               disabled={busy}
               onValueChange={(v) => runBulk({ action: "status", value: v })}
-              options={statuses.map((s) => ({ value: s.slug, label: s.label }))}
-              placeholder="Change status…"
-              searchPlaceholder="Search status…"
-              triggerClassName="h-9 w-44"
               value=""
+            >
+              <SelectTrigger className="h-9 w-44">
+                <SelectValue placeholder="Change status…" />
+              </SelectTrigger>
+              <SelectContent>
+                {statuses.map((s) => (
+                  <SelectItem key={s.slug} value={s.slug}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              disabled={busy}
+              onValueChange={(v) => runBulk({ action: "priority", value: v })}
+              value=""
+            >
+              <SelectTrigger className="h-9 w-44">
+                <SelectValue placeholder="Change priority…" />
+              </SelectTrigger>
+              <SelectContent>
+                {priorities.map((p) => (
+                  <SelectItem key={p.slug} value={p.slug}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <BulkTagSelect
+              disabled={busy}
+              onSelect={(name) => runBulk({ action: "tag", value: name })}
             />
             <Button
               className="h-9"
@@ -310,6 +352,7 @@ export function TicketsTable({
                   categoryMap={categoryMap}
                   isAdmin={isAdmin}
                   key={row.id}
+                  listQuery={listQuery}
                   onToggleSelect={() => toggleOne(row.id)}
                   priorities={priorities}
                   priorityMap={priorityMap}

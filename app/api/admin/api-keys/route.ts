@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { createApiKey, listApiKeys } from "@/lib/api-keys";
+import { audit } from "@/lib/audit";
 import { requireAdminFromRequest } from "@/lib/authz";
 
 // GET /api/admin/api-keys — list keys (never returns the raw secret)
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
 // POST /api/admin/api-keys — create a key. The raw secret is returned once,
 // in this response only — never retrievable again.
 export async function POST(request: NextRequest) {
-  let admin: { id: string; name: string };
+  let admin: { id: string; name: string; email: string };
   try {
     admin = requireAdminFromRequest(request);
   } catch (e) {
@@ -59,6 +60,16 @@ export async function POST(request: NextRequest) {
     createdById: admin.id,
     createdByName: admin.name,
     portalUrlTemplate: body.portalUrlTemplate?.trim() || null,
+  });
+
+  await audit({
+    action: "api_key.created",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: `Created API key "${name}"`,
+    entityId: record.id,
+    entityType: "api_key",
+    metadata: { name, keyPrefix: record.keyPrefix },
   });
 
   return NextResponse.json(

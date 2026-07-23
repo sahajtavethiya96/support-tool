@@ -4,6 +4,7 @@ export const CUSTOMIZABLE_COLUMNS = [
   { id: "status", label: "Status", width: "w-36" },
   { id: "category", label: "Category", width: "w-36" },
   { id: "priority", label: "Priority", width: "w-32" },
+  { id: "sla", label: "SLA", width: "w-48" },
   { id: "customer", label: "Customer", width: "w-40" },
   { id: "assigned", label: "Assigned", width: "w-36" },
   { id: "tags", label: "Tags", width: "w-40" },

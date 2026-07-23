@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { ticketStatuses } from "@/db/schema";
+import { audit } from "@/lib/audit";
 import { requireAdminFromRequest } from "@/lib/authz";
 
 function slugify(label: string): string {
@@ -25,7 +26,8 @@ export async function GET(_request: NextRequest) {
 
 // POST — admin only
 export async function POST(request: NextRequest) {
-  try { requireAdminFromRequest(request); } catch (e) { return e as Response; }
+  let admin;
+  try { admin = requireAdminFromRequest(request); } catch (e) { return e as Response; }
 
   let body: { label?: string; color?: string; isDefault?: boolean; isClosedState?: boolean } = {};
   try {
@@ -82,6 +84,16 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     })
     .returning();
+
+  await audit({
+    action: "ticket_config.status_created",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: `Created status "${label}"`,
+    entityId: inserted.id,
+    entityType: "ticket_status",
+    metadata: { slug, label, color, isDefault, isClosedState },
+  });
 
   return NextResponse.json(inserted, { status: 201 });
 }

@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { ticketAttachments, tickets } from "@/db/schema";
+import { customers, ticketAttachments, tickets } from "@/db/schema";
 import { requireApiKey } from "@/lib/api-auth";
 import { coerceCustomFieldValue, getCustomFieldValues } from "@/lib/custom-fields";
 import { db } from "@/lib/db";
@@ -36,12 +36,13 @@ export async function GET(
       status: tickets.status,
       category: tickets.category,
       priority: tickets.priority,
-      customerName: tickets.customerName,
-      customerEmail: tickets.customerEmail,
+      customerName: customers.name,
+      customerEmail: customers.email,
       createdAt: tickets.createdAt,
       updatedAt: tickets.updatedAt,
     })
     .from(tickets)
+    .innerJoin(customers, eq(tickets.customerId, customers.id))
     .where(eq(tickets.id, id))
     .limit(1);
 

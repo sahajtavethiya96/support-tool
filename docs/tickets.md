@@ -23,6 +23,9 @@ A ticket is the core entity of the support tool. It represents a support request
 | `closedAt` | timestamp | When the ticket was closed (nullable) |
 | `createdAt` | timestamp | When the ticket was created |
 | `updatedAt` | timestamp | When the ticket was last updated |
+| `waitingSince` | timestamp | SLA: when the current wait state began; null once closed. See § SLA |
+| `firstRespondedAt` | timestamp | SLA: frozen at the first non-internal agent/admin reply |
+| `slaActiveSeconds` | integer | SLA: accumulated "waiting for agent" seconds (Resolution clock) |
 
 ---
 
@@ -106,6 +109,52 @@ Admin-defined extra structured fields — text, number, date, checkbox, or selec
 
 ---
 
+## SLA
+
+SLA policies are **admin-configurable** — managed at `/admin/ticket-config`, stored in `sla_policies`. Each policy defines three targets in minutes: **First Response**, **Next Response**, and **Resolution**.
+
+### Policy scoping and resolution
+
+A policy is optionally scoped by `priority` and/or `category` (both nullable — null means "any"). The **most specific match wins**, resolved live against the current policy list every time it's needed (not snapshotted per ticket — editing a policy immediately re-targets its matching open tickets):
+
+1. exact match: `priority = ticket.priority AND category = ticket.category`
+2. `priority = ticket.priority AND category IS NULL`
+3. `priority IS NULL AND category = ticket.category`
+4. the `isDefault` policy (the global fallback — always unscoped, `priority` and `category` both null)
+
+Exactly one policy should have `isDefault = true`. The admin UI only allows marking an unscoped ("Any priority" / "Any category") policy as default, and setting a new default automatically unsets the previous one.
+
+### The three metrics
+
+- **First Response** — elapsed time from ticket creation to the first non-internal agent/admin reply. Frozen permanently once that reply happens (`tickets.firstRespondedAt`) — the metric keeps showing its final met/breached outcome afterward.
+- **Next Response** — elapsed time since the customer's most recent unanswered message (`tickets.waitingSince`), counted only once First Response has already happened and only while currently waiting on the agent. Not shown while waiting on the customer (nothing is currently due from the agent) or before the first reply.
+- **Resolution** — total accumulated "waiting for agent" time across the ticket's whole lifetime (`tickets.slaActiveSeconds` plus any in-progress span), compared against the policy's resolution target. Frozen with a final met/breached verdict once the ticket is closed; resuming (reopening) continues accumulating from where it left off rather than resetting.
+
+### Pause/resume
+
+The SLA clock rides the same `tickets.awaitingReply` flag the rest of the app already uses for the unread/notification badge: `true` = **waiting for agent** (clock running), `false` = **waiting for customer** (clock paused). It's flipped by the same events that already flip `awaitingReply` — ticket creation, agent/customer replies, close, and reopen — so there's no separate event stream to keep in sync. `tickets.waitingSince` records when the *current* wait state began, and is only updated on an actual state change (a customer's second follow-up before the agent replies doesn't reset anything).
+
+### Display
+
+Shown on both the ticket list (customizable **SLA** column — see § Ticket List Columns) and the ticket detail page's **SLA** sidebar card: "Open for" (total ticket age), the current wait state with its duration ("Waiting for agent · 2h 15m" / "Waiting for customer…" / "Resolved"), and each applicable metric as a colored pill:
+
+| Color | Meaning |
+|-------|---------|
+| Green | On track, or already met |
+| Yellow | Live and ≥80% of the target elapsed (approaching deadline) |
+| Red | Breached (live and over target, or a frozen breached outcome) |
+
+The countdown ticks forward client-side every 30 seconds without a page reload — the server sends one snapshot per ticket and the client re-derives the current elapsed time from it.
+
+### Business rules
+
+- A policy's (priority, category) scope pair must be unique — the admin API rejects a duplicate.
+- Only an unscoped policy can be `isDefault`.
+- The `isDefault` policy cannot be deleted — mark another policy as default first.
+- See `docs/plans/12-sla.md` for the full design write-up, including business-hours/holidays as a documented future extension point.
+
+---
+
 ## Ticket Number
 
 - `ticket_number` is a PostgreSQL `serial` (auto-increment integer).
@@ -119,10 +168,13 @@ Admin-defined extra structured fields — text, number, date, checkbox, or selec
 
 Each agent/admin can customize their own `/tickets` table — which columns are shown and in what order —
 from the "Columns" button above the table. Checkbox, `#`, and Subject are always pinned first; the rest
-(Status, Category, Priority, Customer, Assigned, Tags, Updated By, Updated) are toggle/reorderable.
+(Status, Category, Priority, SLA, Customer, Assigned, Tags, Updated By, Updated) are toggle/reorderable.
 
 - Persisted per user in `user_ticket_table_prefs` (`columns` jsonb — visibility + order), via
   `PATCH /api/tickets/table-columns`. Not shared across agents.
+- **SLA** — "Open for" + current wait state, plus the single most urgent metric (First/Next Response or
+  Resolution, whichever is closest to breaching). See § SLA for the full model; the detail page's SLA
+  sidebar card shows all three metrics.
 - **Tags** — the ticket's tags, read-only in this view (manage them from the ticket detail sidebar).
 - **Updated By** — the most recent **agent/admin** actor from `ticket_activity` for that ticket (customer
   activity is excluded); shows "—" if no agent/admin has touched it yet.
@@ -231,8 +283,10 @@ Activity history is displayed chronologically on the ticket detail page for agen
 | GET | `/api/tickets` | Agent/Admin | List all tickets (paginated, filterable) |
 | GET | `/api/tickets/mine` | Customer (token) | List tickets for a customer email (via token in query) |
 | GET | `/api/tickets/{id}` | Customer (token) / Agent | Get ticket details |
-| PATCH | `/api/tickets/{id}` | Agent/Admin | Update status or assigned agent |
+| PATCH | `/api/tickets/{id}` | Agent/Admin | Update status, priority, category, or assigned agent |
 | PATCH | `/api/tickets/{id}/close` | Customer (token) / Agent | Close the ticket |
 | PATCH | `/api/tickets/{id}/reopen` | Customer (token) / Agent | Reopen the ticket |
 | POST | `/api/tickets/{id}/comments` | Customer (token) / Agent | Add a comment or internal note |
 | DELETE | `/api/tickets/{id}` | Admin only | Hard delete (spam removal) |
+| PATCH | `/api/tickets/bulk` | Admin only | Bulk assign, change status, change priority, or add a tag across up to 200 tickets at once (body: `{ ids, action: "assign" \| "status" \| "priority" \| "tag", value }`) |
+| DELETE | `/api/tickets/bulk` | Admin only | Bulk hard delete (spam removal) across up to 200 tickets at once |

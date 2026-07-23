@@ -3,28 +3,19 @@ import {
   CaretRightIcon,
   TicketIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  gte,
-  ilike,
-  inArray,
-  isNull,
-  lte,
-  or,
-} from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, or } from "drizzle-orm";
 import Link from "next/link";
 import { Suspense } from "react";
 import { TicketsListRealtime } from "@/components/agent/tickets-list-realtime";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ADMIN_ROLE, AGENT_ROLE } from "@/config/platform";
 import { user } from "@/db/schema/auth";
+import { customers } from "@/db/schema/customers";
 import { ticketActivity, tickets } from "@/db/schema/tickets";
 import { requireAgent } from "@/lib/authz";
 import { db } from "@/lib/db";
+import { computeSlaSnapshot } from "@/lib/sla";
+import { getSlaPolicies, resolveSlaPolicy, type SlaPolicy } from "@/lib/sla-policies";
 import { getTicketTagsForTickets } from "@/lib/tags";
 import {
   getTicketCategories,
@@ -34,6 +25,12 @@ import {
   type TicketPriority,
   type TicketStatus,
 } from "@/lib/ticket-config";
+import {
+  buildTicketsWhereClause,
+  parseTicketListSort,
+  SORT_COLUMNS,
+  type TicketListSearchParams,
+} from "@/lib/tickets-list-query";
 import type { ColumnPref } from "@/lib/tickets-table-columns";
 import { getTicketTableColumnPrefs } from "@/lib/user-preferences";
 import { cn } from "@/lib/utils";
@@ -48,50 +45,7 @@ export const metadata = { title: "All Tickets" };
 
 const DEFAULT_PAGE_SIZE = 25;
 
-type SearchParams = {
-  q?: string;
-  status?: string;
-  category?: string;
-  priority?: string;
-  assignee?: string;
-  range?: string;
-  from?: string;
-  to?: string;
-  awaiting?: string;
-  mine?: string;
-  sort?: string;
-  order?: string;
-  page?: string;
-  pageSize?: string;
-};
-
-const SORT_COLUMNS = {
-  id: tickets.ticketNumber,
-  updatedAt: tickets.updatedAt,
-} as const;
-type SortKey = keyof typeof SORT_COLUMNS;
-
-const RANGE_DAYS: Record<string, number> = {
-  last_day: 1,
-  last_week: 7,
-};
-
-function getRangeStart(range: string | null): Date | null {
-  if (!range) {
-    return null;
-  }
-  if (range === "this_month") {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  }
-  const days = RANGE_DAYS[range];
-  if (!days) {
-    return null;
-  }
-  const start = new Date();
-  start.setDate(start.getDate() - days);
-  return start;
-}
+type SearchParams = TicketListSearchParams;
 
 /** Page numbers to render, with "ellipsis" markers where pages are skipped. */
 function getPageNumbers(
@@ -144,12 +98,13 @@ export default async function TicketsPage({ searchParams }: Props) {
   const params = await searchParams;
 
   const session = await requireAgent();
-  const [statuses, categories, priorities, columnPrefs, agents] =
+  const [statuses, categories, priorities, columnPrefs, slaPolicies, agents] =
     await Promise.all([
       getTicketStatuses(),
       getTicketCategories(),
       getTicketPriorities(),
       getTicketTableColumnPrefs(session.id),
+      getSlaPolicies(),
       db
         .select({ id: user.id, name: user.name, email: user.email })
         .from(user)
@@ -185,6 +140,7 @@ export default async function TicketsPage({ searchParams }: Props) {
           isAdmin={session.role === ADMIN_ROLE}
           params={params}
           priorities={priorities}
+          slaPolicies={slaPolicies}
           statuses={statuses}
         />
       </Suspense>
@@ -200,6 +156,7 @@ async function TicketsResults({
   statuses,
   categories,
   priorities,
+  slaPolicies,
   columnPrefs,
 }: {
   params: SearchParams;
@@ -209,6 +166,7 @@ async function TicketsResults({
   statuses: TicketStatus[];
   categories: TicketCategory[];
   priorities: TicketPriority[];
+  slaPolicies: SlaPolicy[];
   columnPrefs: ColumnPref[];
 }) {
   const statusMap = Object.fromEntries(statuses.map((s) => [s.slug, s]));
@@ -233,80 +191,14 @@ async function TicketsResults({
     params.range && params.range !== "all" ? params.range : null;
   const awaitingFilter = params.awaiting === "1";
   const mineFilter = params.mine === "1";
-  const sortKey: SortKey = params.sort === "id" ? "id" : "updatedAt";
-  const sortOrder = params.order === "asc" ? "asc" : "desc";
+  const { sortKey, sortOrder } = parseTicketListSort(params);
 
-  // Build where conditions
-  const conditions = [];
-  if (search) {
-    const numSearch = Number.parseInt(search.replace("#", ""), 10);
-    const textConditions = [
-      ilike(tickets.subject, `%${search}%`),
-      ilike(tickets.customerName, `%${search}%`),
-      ilike(tickets.customerEmail, `%${search}%`),
-    ];
-    if (!isNaN(numSearch)) {
-      textConditions.push(eq(tickets.ticketNumber, numSearch) as never);
-    }
-    conditions.push(or(...textConditions));
-  }
-  if (statusFilter) {
-    // Supports a comma-separated slug list — dashboard buckets like
-    // "In Progress" and "Closed" span multiple statuses.
-    const statusSlugs = statusFilter
-      .split(",")
-      .map((v) => v.trim())
-      .filter(Boolean);
-    if (statusSlugs.length > 1) {
-      conditions.push(inArray(tickets.status, statusSlugs));
-    } else if (statusSlugs.length === 1) {
-      conditions.push(eq(tickets.status, statusSlugs[0]));
-    }
-  }
-  if (categoryFilter) {
-    conditions.push(eq(tickets.category, categoryFilter));
-  }
-  if (priorityFilter) {
-    conditions.push(eq(tickets.priority, priorityFilter));
-  }
-  if (rangeFilter === "custom") {
-    // Custom range: from/to are YYYY-MM-DD day bounds, both optional.
-    const isDay = (v: string | undefined): v is string =>
-      !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
-    if (isDay(params.from)) {
-      conditions.push(
-        gte(tickets.createdAt, new Date(`${params.from}T00:00:00`))
-      );
-    }
-    if (isDay(params.to)) {
-      conditions.push(
-        lte(tickets.createdAt, new Date(`${params.to}T23:59:59.999`))
-      );
-    }
-  }
-  const rangeStart = getRangeStart(rangeFilter);
-  if (rangeStart) {
-    conditions.push(gte(tickets.createdAt, rangeStart));
-  }
-  if (awaitingFilter) {
-    conditions.push(eq(tickets.awaitingReply, true));
-  }
-  if (mineFilter) {
-    conditions.push(eq(tickets.assignedAgentId, agentId));
-  }
-  if (assigneeFilter) {
-    conditions.push(
-      assigneeFilter === "unassigned"
-        ? isNull(tickets.assignedAgentId)
-        : eq(tickets.assignedAgentId, assigneeFilter)
-    );
-  }
-
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = buildTicketsWhereClause(params, agentId);
 
   const [{ total }] = await db
     .select({ total: count() })
     .from(tickets)
+    .innerJoin(customers, eq(tickets.customerId, customers.id))
     .where(whereClause);
 
   const rows = await db
@@ -317,13 +209,19 @@ async function TicketsResults({
       status: tickets.status,
       category: tickets.category,
       priority: tickets.priority,
-      customerName: tickets.customerName,
+      customerName: customers.name,
       assignedAgentId: tickets.assignedAgentId,
       assignedAgentName: user.name,
       createdAt: tickets.createdAt,
       updatedAt: tickets.updatedAt,
+      closedAt: tickets.closedAt,
+      awaitingReply: tickets.awaitingReply,
+      waitingSince: tickets.waitingSince,
+      firstRespondedAt: tickets.firstRespondedAt,
+      slaActiveSeconds: tickets.slaActiveSeconds,
     })
     .from(tickets)
+    .innerJoin(customers, eq(tickets.customerId, customers.id))
     .leftJoin(user, eq(tickets.assignedAgentId, user.id))
     .where(whereClause)
     .orderBy(
@@ -363,10 +261,16 @@ async function TicketsResults({
     updatedByRows.map((r) => [r.ticketId, r.actorName])
   );
 
+  const slaNow = new Date();
   const rowsWithExtras = rows.map((r) => ({
     ...r,
     tags: tagsByTicket[r.id] ?? [],
     updatedByName: updatedByTicket[r.id] ?? null,
+    slaSnapshot: computeSlaSnapshot(
+      r,
+      resolveSlaPolicy(slaPolicies, r.category, r.priority),
+      slaNow
+    ),
   }));
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -413,6 +317,11 @@ async function TicketsResults({
     return `/tickets${qs ? `?${qs}` : ""}`;
   }
 
+  // Carries the current filter/sort/page state onto each ticket's detail
+  // link, so the ticket detail page's Previous/Next buttons can traverse
+  // this same filtered result set (see lib/tickets-list-query.ts).
+  const listQuery = buildPageUrl(page).slice("/tickets".length);
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
@@ -444,6 +353,7 @@ async function TicketsResults({
             categoryMap={categoryMap}
             columnPrefs={columnPrefs}
             isAdmin={isAdmin}
+            listQuery={listQuery}
             priorities={priorities}
             priorityMap={priorityMap}
             rows={rowsWithExtras}

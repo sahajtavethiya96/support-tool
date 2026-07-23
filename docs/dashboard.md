@@ -6,6 +6,8 @@ The dashboard gives agents and admins a quick snapshot of the support queue's he
 
 Customers do not have access to the dashboard.
 
+For cross-agent comparisons (tickets/response-time per agent, category/priority/tag breakdowns, CSV export), see the admin-only **Reports** page at `/admin/reports` (`docs/admin-portal.md` § 4) — deliberately kept separate from this shared dashboard rather than added here, since it's the only place in the app that compares individual agents against each other.
+
 ---
 
 ## Stats Cards

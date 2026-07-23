@@ -3,7 +3,7 @@ import {
   CaretRightIcon,
   ClockCounterClockwiseIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { and, count, desc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, or } from "drizzle-orm";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
@@ -26,9 +26,17 @@ export default async function AuditLogPage({ searchParams }: Props) {
   await requireAdmin();
   const params = await searchParams;
 
+  // Derived from the data itself (not a hand-maintained list) so the filter
+  // never goes stale as new audit() call sites are added elsewhere in the
+  // codebase — see docs/plans/07-audit-log-viewer.md.
+  const availableActions = await db
+    .selectDistinct({ action: auditLogs.action })
+    .from(auditLogs)
+    .orderBy(asc(auditLogs.action));
+
   return (
     <div className="p-4 lg:p-6 max-w-6xl mx-auto space-y-6">
-      <AuditLogFilters />
+      <AuditLogFilters actions={availableActions.map((a) => a.action)} />
 
       <Suspense
         fallback={<AuditLogTableSkeleton />}

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { ticketCustomFields } from "@/db/schema";
+import { audit } from "@/lib/audit";
 import { requireAdminFromRequest } from "@/lib/authz";
 import { db } from "@/lib/db";
 
@@ -11,8 +12,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let admin;
   try {
-    requireAdminFromRequest(request);
+    admin = requireAdminFromRequest(request);
   } catch (e) {
     return e as Response;
   }
@@ -83,6 +85,16 @@ export async function PATCH(
     .where(eq(ticketCustomFields.id, id))
     .returning();
 
+  await audit({
+    action: "custom_field.updated",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: `Updated custom field "${existing.label}"`,
+    entityId: id,
+    entityType: "custom_field",
+    metadata: { key: existing.key, changes: body },
+  });
+
   return NextResponse.json(updated);
 }
 
@@ -93,8 +105,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let admin;
   try {
-    requireAdminFromRequest(request);
+    admin = requireAdminFromRequest(request);
   } catch (e) {
     return e as Response;
   }
@@ -102,7 +115,7 @@ export async function DELETE(
   const { id } = await params;
 
   const [existing] = await db
-    .select({ id: ticketCustomFields.id })
+    .select({ id: ticketCustomFields.id, key: ticketCustomFields.key, label: ticketCustomFields.label })
     .from(ticketCustomFields)
     .where(eq(ticketCustomFields.id, id))
     .limit(1);
@@ -111,5 +124,16 @@ export async function DELETE(
   }
 
   await db.delete(ticketCustomFields).where(eq(ticketCustomFields.id, id));
+
+  await audit({
+    action: "custom_field.deleted",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: `Deleted custom field "${existing.label}"`,
+    entityId: id,
+    entityType: "custom_field",
+    metadata: { key: existing.key, label: existing.label },
+  });
+
   return NextResponse.json({ ok: true });
 }

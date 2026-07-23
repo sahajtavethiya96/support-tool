@@ -52,6 +52,8 @@ Filters are combinable. Active filters are shown as removable chips above the li
 - Select multiple tickets with checkboxes.
 - Bulk assign to an agent.
 - Bulk change status.
+- Bulk change priority.
+- Bulk add a tag (search the shared tag pool or create a new one — same freeform pool as the ticket detail page's tag picker).
 - Bulk delete (spam — admin only).
 
 ---
@@ -64,6 +66,14 @@ The full ticket view for agents. Split into two panels:
 - Ticket subject and description (from customer).
 - Full comment thread (all public replies + internal notes — agents see everything).
 - Reply form at the bottom.
+
+### Previous / Next Navigation
+
+- ← Previous and Next → buttons in the sticky header let an agent step through tickets one by one without going back to the list — built for queue-processing (e.g. clearing all open, unassigned tickets).
+- They move within the **same filtered/sorted result set** the agent opened the ticket from (search, status/category/priority/assignee filters, date range, sort column/order) — not all tickets, and not limited to the current page; the queue continues seamlessly across pagination boundaries.
+- The list's filter/sort/page state travels with the ticket link as a query string, so opening a ticket from a filtered list and clicking Next repeatedly keeps applying the same filters. The "All Tickets" breadcrumb link also returns to that same filtered page.
+- A button is disabled (not rendered as a link) when there is no previous/next ticket in that result set — e.g. at either end of the queue.
+- Implemented as a cheap keyset ("seek") lookup — two single-row queries against `(sortKey, ticketNumber)` — rather than loading the whole filtered list, so it stays fast regardless of how many tickets match. See `lib/tickets-list-query.ts`.
 
 **Right / Sidebar:**
 - Ticket information (ID, status, category, created, updated, closed date).

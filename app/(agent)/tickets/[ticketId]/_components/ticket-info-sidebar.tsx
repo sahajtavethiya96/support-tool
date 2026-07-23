@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { SearchableSelect } from "@/components/common/searchable-select";
+import { SlaMetricBadge, SlaWaitBadge } from "@/components/common/sla-badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,7 +15,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { CustomFieldWithValue } from "@/lib/custom-fields";
+import type { SlaSnapshot } from "@/lib/sla";
 import type {
   TicketCategory,
   TicketPriority,
@@ -22,6 +31,7 @@ import type {
 } from "@/lib/ticket-config";
 import { COLOR_BADGE, formatTicketDateTime } from "@/lib/tickets";
 import { getInitials } from "@/lib/utils";
+import { CustomerProfilePopover } from "./customer-profile-popover";
 import { SidebarCard } from "./sidebar-card";
 import { TicketCustomFields } from "./ticket-custom-fields";
 import { TicketTags } from "./ticket-tags";
@@ -45,6 +55,7 @@ interface Props {
   customFields: CustomFieldWithValue[];
   isAdmin?: boolean;
   priorities: TicketPriority[];
+  slaSnapshot: SlaSnapshot;
   statuses: TicketStatus[];
   tags: Array<{ id: string; name: string }>;
   ticket: {
@@ -54,6 +65,7 @@ interface Props {
     status: string;
     category: string;
     priority: string;
+    customerId: string;
     customerName: string;
     customerEmail: string;
     assignedAgentId: string | null;
@@ -70,6 +82,7 @@ export function TicketInfoSidebar({
   statuses,
   categories,
   priorities,
+  slaSnapshot,
   tags,
   customFields,
   currentUserId,
@@ -281,44 +294,66 @@ export function TicketInfoSidebar({
 
           <div className="space-y-1">
             <span className="text-xs text-muted-foreground">Status</span>
-            <SearchableSelect
+            <Select
               disabled={loading}
               onValueChange={handleStatusChange}
-              options={statuses.map((s) => ({ value: s.slug, label: s.label }))}
-              searchPlaceholder="Search status…"
-              triggerClassName={`h-8 w-full text-xs border ${COLOR_BADGE[statusMap[status]?.color ?? "slate"] ?? "border-border"}`}
               value={status}
-            />
+            >
+              <SelectTrigger
+                className={`h-8 w-full text-xs border ${COLOR_BADGE[statusMap[status]?.color ?? "slate"] ?? "border-border"}`}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {statuses.map((s) => (
+                  <SelectItem key={s.slug} value={s.slug}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-1">
             <span className="text-xs text-muted-foreground">Priority</span>
-            <SearchableSelect
+            <Select
               disabled={loading}
               onValueChange={handlePriorityChange}
-              options={priorities.map((p) => ({
-                value: p.slug,
-                label: p.label,
-              }))}
-              searchPlaceholder="Search priority…"
-              triggerClassName={`h-8 w-full text-xs border ${COLOR_BADGE[priorityMap[priority]?.color ?? "slate"] ?? "border-border"}`}
               value={priority}
-            />
+            >
+              <SelectTrigger
+                className={`h-8 w-full text-xs border ${COLOR_BADGE[priorityMap[priority]?.color ?? "slate"] ?? "border-border"}`}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {priorities.map((p) => (
+                  <SelectItem key={p.slug} value={p.slug}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-1">
             <span className="text-xs text-muted-foreground">Category</span>
-            <SearchableSelect
+            <Select
               disabled={loading}
               onValueChange={handleCategoryChange}
-              options={categories.map((c) => ({
-                value: c.slug,
-                label: categoryMap[c.slug]?.label ?? c.label,
-              }))}
-              searchPlaceholder="Search category…"
-              triggerClassName="h-8 w-full text-xs"
               value={category}
-            />
+            >
+              <SelectTrigger className="h-8 w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((c) => (
+                  <SelectItem key={c.slug} value={c.slug}>
+                    {categoryMap[c.slug]?.label ?? c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex items-center justify-between">
@@ -371,6 +406,31 @@ export function TicketInfoSidebar({
         {error && <p className="text-xs text-red-600">{error}</p>}
       </SidebarCard>
 
+      {/* SLA */}
+      <SidebarCard
+        contentClassName="space-y-3"
+        title="SLA"
+        {...accordionProps("sla")}
+      >
+        <SlaWaitBadge snapshot={slaSnapshot} />
+        <div className="space-y-1.5">
+          {slaSnapshot.firstResponse && (
+            <SlaMetricBadge className="w-full justify-start" metric={slaSnapshot.firstResponse} />
+          )}
+          {slaSnapshot.nextResponse && (
+            <SlaMetricBadge className="w-full justify-start" metric={slaSnapshot.nextResponse} />
+          )}
+          {slaSnapshot.resolution && (
+            <SlaMetricBadge className="w-full justify-start" metric={slaSnapshot.resolution} />
+          )}
+          {!slaSnapshot.firstResponse && (
+            <p className="text-xs text-muted-foreground">
+              No SLA policy configured.
+            </p>
+          )}
+        </div>
+      </SidebarCard>
+
       {/* Tags */}
       <SidebarCard title="Tags" {...accordionProps("tags")}>
         <TicketTags initialTags={tags} ticketId={ticket.id} />
@@ -385,19 +445,29 @@ export function TicketInfoSidebar({
 
       {/* Customer Info */}
       <SidebarCard title="Customer" {...accordionProps("customer")}>
-        <div className="flex items-start gap-2.5">
-          <div className="size-7 rounded-full bg-accent border border-border flex items-center justify-center text-xs font-medium text-foreground shrink-0">
-            {getInitials(ticket.customerName)}
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">
-              {ticket.customerName}
-            </p>
-            <p className="text-xs text-muted-foreground truncate">
-              {ticket.customerEmail}
-            </p>
-          </div>
-        </div>
+        <CustomerProfilePopover
+          currentTicketId={ticket.id}
+          customerEmail={ticket.customerEmail}
+          customerId={ticket.customerId}
+          customerName={ticket.customerName}
+        >
+          <button
+            className="flex items-start gap-2.5 w-full text-left rounded-md -m-1 p-1 hover:bg-accent transition-colors"
+            type="button"
+          >
+            <div className="size-7 rounded-full bg-accent border border-border flex items-center justify-center text-xs font-medium text-foreground shrink-0">
+              {getInitials(ticket.customerName)}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">
+                {ticket.customerName}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {ticket.customerEmail}
+              </p>
+            </div>
+          </button>
+        </CustomerProfilePopover>
       </SidebarCard>
 
       {/* Assigned Agent */}

@@ -64,6 +64,7 @@ import {
   ticketTags,
   user,
 } from "@/db/schema";
+import { findOrCreateCustomer } from "@/lib/customers";
 import { db, dbClient } from "@/lib/db";
 import {
   htmlToRichTextJson,
@@ -640,14 +641,19 @@ async function migrateOneTicket(
     };
   }
 
-  // Find-or-create every tag BEFORE opening the ticket's transaction, and
-  // never inside it: getOrCreateTagId writes through the global `db` handle,
-  // so from inside tx it would run on a *different* pooled connection —
+  // Find-or-create every tag and the customer BEFORE opening the ticket's
+  // transaction, and never inside it: both write through the global `db`
+  // handle, so from inside tx they'd run on a *different* pooled connection —
   // outside the transaction, invisible to it, and able to deadlock against it.
-  // Resolving first also means tags/ticket_tags rows can't disagree: the tag
-  // rows are committed, and the tx only inserts the links. A tag left behind
-  // by a rolled-back ticket is harmless — it's a shared pool, not ticket-owned.
+  // Resolving first also means these rows can't disagree with the tx: they're
+  // committed up front, and the tx only inserts rows that reference them. A
+  // tag/customer left behind by a rolled-back ticket is harmless — shared
+  // pool, not ticket-owned.
   const tagIds = await Promise.all(tagNames.map(getOrCreateTagId));
+  const customerRecord = await findOrCreateCustomer(
+    customerName,
+    customerEmail || "unknown@migrated.local"
+  );
 
   try {
     await db.transaction(async (tx) => {
@@ -658,8 +664,7 @@ async function migrateOneTicket(
         category: cfg.validCategory,
         status,
         priority: priorityForId(zTicket.priority_id, cfg.defaultPriority),
-        customerName,
-        customerEmail: customerEmail || "unknown@migrated.local",
+        customerId: customerRecord.id,
         customerToken: createId(),
         assignedAgentId,
         source: "portal",

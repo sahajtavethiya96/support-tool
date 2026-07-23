@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { ticketCategories, tickets } from "@/db/schema";
+import { audit } from "@/lib/audit";
 import { requireAdminFromRequest } from "@/lib/authz";
 
 // PATCH — admin only
@@ -10,7 +11,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try { requireAdminFromRequest(request); } catch (e) { return e as Response; }
+  let admin;
+  try { admin = requireAdminFromRequest(request); } catch (e) { return e as Response; }
 
   const { id } = await params;
 
@@ -42,6 +44,16 @@ export async function PATCH(
     .where(eq(ticketCategories.id, id))
     .returning();
 
+  await audit({
+    action: "ticket_config.category_updated",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: `Updated category "${existing.label}"`,
+    entityId: id,
+    entityType: "ticket_category",
+    metadata: { slug: existing.slug, changes: body },
+  });
+
   return NextResponse.json(updated);
 }
 
@@ -50,7 +62,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try { requireAdminFromRequest(request); } catch (e) { return e as Response; }
+  let admin;
+  try { admin = requireAdminFromRequest(request); } catch (e) { return e as Response; }
 
   const { id } = await params;
 
@@ -86,5 +99,16 @@ export async function DELETE(
   }
 
   await db.delete(ticketCategories).where(eq(ticketCategories.id, id));
+
+  await audit({
+    action: "ticket_config.category_deleted",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: `Deleted category "${existing.label}"`,
+    entityId: id,
+    entityType: "ticket_category",
+    metadata: { slug: existing.slug, label: existing.label },
+  });
+
   return NextResponse.json({ ok: true });
 }

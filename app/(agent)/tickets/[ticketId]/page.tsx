@@ -1,5 +1,10 @@
-import { ArrowLeftIcon, LockSimpleIcon } from "@phosphor-icons/react/dist/ssr";
-import { and, asc, eq } from "drizzle-orm";
+import {
+  ArrowLeftIcon,
+  CaretLeftIcon,
+  CaretRightIcon,
+  LockSimpleIcon,
+} from "@phosphor-icons/react/dist/ssr";
+import { and, asc, desc, eq, gt, lt, or } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TicketDetailRealtime } from "@/components/agent/ticket-detail-realtime";
@@ -9,6 +14,7 @@ import { RichTextContent } from "@/components/common/rich-text-content";
 import { ScrollToBottomOnMount } from "@/components/common/scroll-to-bottom-on-mount";
 import { ADMIN_ROLE } from "@/config/platform";
 import { user } from "@/db/schema/auth";
+import { customers } from "@/db/schema/customers";
 import {
   ticketActivity,
   ticketAttachments,
@@ -20,6 +26,8 @@ import { getCannedResponses } from "@/lib/canned-responses";
 import { getCustomFieldValues } from "@/lib/custom-fields";
 import { db } from "@/lib/db";
 import { isRichTextEmpty } from "@/lib/rich-text";
+import { computeSlaSnapshot } from "@/lib/sla";
+import { getSlaPolicies, resolveSlaPolicy } from "@/lib/sla-policies";
 import { storage } from "@/lib/storage";
 import { getTicketTags } from "@/lib/tags";
 import {
@@ -28,16 +36,118 @@ import {
   getTicketStatuses,
 } from "@/lib/ticket-config";
 import { COLOR_BADGE } from "@/lib/tickets";
+import {
+  buildTicketsWhereClause,
+  parseTicketListSort,
+  type SortKey,
+  type TicketListSearchParams,
+  toQueryString,
+} from "@/lib/tickets-list-query";
 import { getInitials } from "@/lib/utils";
 import { AgentReplyForm } from "./_components/agent-reply-form";
+import { CustomerProfilePopover } from "./_components/customer-profile-popover";
 import { TicketInfoSidebar } from "./_components/ticket-info-sidebar";
 
 interface Props {
   params: Promise<{ ticketId: string }>;
+  searchParams: Promise<TicketListSearchParams>;
 }
 
-export default async function AgentTicketDetailPage({ params }: Props) {
+/** The neighbor strictly before/after `current` within the same filtered,
+ * sorted result set the agent came from — a keyset ("seek") comparison
+ * against (sortKey, ticketNumber) rather than loading the whole list, so
+ * this stays cheap regardless of list size and works across page boundaries. */
+async function getAdjacentTicketId(
+  direction: "prev" | "next",
+  whereClause: ReturnType<typeof buildTicketsWhereClause>,
+  sortKey: SortKey,
+  sortOrder: "asc" | "desc",
+  current: { ticketNumber: number; updatedAt: Date }
+): Promise<string | null> {
+  const wantsGreater =
+    direction === "next" ? sortOrder === "asc" : sortOrder === "desc";
+
+  const seekCondition =
+    sortKey === "id"
+      ? wantsGreater
+        ? gt(tickets.ticketNumber, current.ticketNumber)
+        : lt(tickets.ticketNumber, current.ticketNumber)
+      : or(
+          wantsGreater
+            ? gt(tickets.updatedAt, current.updatedAt)
+            : lt(tickets.updatedAt, current.updatedAt),
+          and(
+            eq(tickets.updatedAt, current.updatedAt),
+            wantsGreater
+              ? gt(tickets.ticketNumber, current.ticketNumber)
+              : lt(tickets.ticketNumber, current.ticketNumber)
+          )
+        );
+
+  const where = whereClause ? and(whereClause, seekCondition) : seekCondition;
+  const resultOrder = wantsGreater ? asc : desc;
+
+  const [row] = await db
+    .select({ id: tickets.id })
+    .from(tickets)
+    .innerJoin(customers, eq(tickets.customerId, customers.id))
+    .where(where)
+    .orderBy(
+      ...(sortKey === "id"
+        ? [resultOrder(tickets.ticketNumber)]
+        : [resultOrder(tickets.updatedAt), resultOrder(tickets.ticketNumber)])
+    )
+    .limit(1);
+
+  return row?.id ?? null;
+}
+
+function TicketNavLink({
+  ticketId,
+  listQuery,
+  direction,
+}: {
+  ticketId: string | null;
+  listQuery: string;
+  direction: "prev" | "next";
+}) {
+  const Icon = direction === "prev" ? CaretLeftIcon : CaretRightIcon;
+  const label = direction === "prev" ? "Previous ticket" : "Next ticket";
+  const className =
+    "inline-flex size-7 items-center justify-center rounded-md border transition-colors";
+
+  if (!ticketId) {
+    return (
+      <button
+        aria-label={label}
+        className={`${className} cursor-not-allowed border-border/50 text-muted-foreground/40`}
+        disabled
+        title={label}
+        type="button"
+      >
+        <Icon className="size-4" />
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      aria-label={label}
+      className={`${className} border-border text-foreground hover:bg-accent`}
+      href={`/tickets/${ticketId}${listQuery}`}
+      title={label}
+    >
+      <Icon className="size-4" />
+    </Link>
+  );
+}
+
+export default async function AgentTicketDetailPage({
+  params,
+  searchParams,
+}: Props) {
   const { ticketId } = await params;
+  const listParams = await searchParams;
   const session = await requireAgent();
 
   const [ticket] = await db
@@ -49,14 +159,20 @@ export default async function AgentTicketDetailPage({ params }: Props) {
       category: tickets.category,
       status: tickets.status,
       priority: tickets.priority,
-      customerName: tickets.customerName,
-      customerEmail: tickets.customerEmail,
+      customerId: tickets.customerId,
+      customerName: customers.name,
+      customerEmail: customers.email,
       assignedAgentId: tickets.assignedAgentId,
       closedAt: tickets.closedAt,
       createdAt: tickets.createdAt,
       updatedAt: tickets.updatedAt,
+      awaitingReply: tickets.awaitingReply,
+      waitingSince: tickets.waitingSince,
+      firstRespondedAt: tickets.firstRespondedAt,
+      slaActiveSeconds: tickets.slaActiveSeconds,
     })
     .from(tickets)
+    .innerJoin(customers, eq(tickets.customerId, customers.id))
     .where(eq(tickets.id, ticketId))
     .limit(1);
 
@@ -64,15 +180,33 @@ export default async function AgentTicketDetailPage({ params }: Props) {
     notFound();
   }
 
-  const [statuses, categories, priorities, cannedResponses, tags, customFields] =
-    await Promise.all([
-      getTicketStatuses(),
-      getTicketCategories(),
-      getTicketPriorities(),
-      getCannedResponses(),
-      getTicketTags(ticketId),
-      getCustomFieldValues(ticketId),
-    ]);
+  // Reconstructs the same filtered/sorted result set the agent came from
+  // (see lib/tickets-list-query.ts) so Previous/Next stay within that queue.
+  const listWhereClause = buildTicketsWhereClause(listParams, session.id);
+  const { sortKey, sortOrder } = parseTicketListSort(listParams);
+  const listQuery = toQueryString(listParams);
+
+  const [
+    statuses,
+    categories,
+    priorities,
+    slaPolicies,
+    cannedResponses,
+    tags,
+    customFields,
+    prevTicketId,
+    nextTicketId,
+  ] = await Promise.all([
+    getTicketStatuses(),
+    getTicketCategories(),
+    getTicketPriorities(),
+    getSlaPolicies(),
+    getCannedResponses(),
+    getTicketTags(ticketId),
+    getCustomFieldValues(ticketId),
+    getAdjacentTicketId("prev", listWhereClause, sortKey, sortOrder, ticket),
+    getAdjacentTicketId("next", listWhereClause, sortKey, sortOrder, ticket),
+  ]);
 
   const statusMap = Object.fromEntries(statuses.map((s) => [s.slug, s]));
   const categoryMap = Object.fromEntries(categories.map((c) => [c.slug, c]));
@@ -104,7 +238,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
     .select()
     .from(ticketActivity)
     .where(eq(ticketActivity.ticketId, ticketId))
-    .orderBy(asc(ticketActivity.createdAt));
+    .orderBy(desc(ticketActivity.createdAt));
 
   // Agents for assignment dropdown
   const agents = await db
@@ -113,6 +247,12 @@ export default async function AgentTicketDetailPage({ params }: Props) {
     .where(and(eq(user.banned, false)));
 
   const isOpen = !(statusMap[ticket.status]?.isClosedState ?? false);
+
+  const slaSnapshot = computeSlaSnapshot(
+    ticket,
+    resolveSlaPolicy(slaPolicies, ticket.category, ticket.priority),
+    new Date()
+  );
 
   return (
     <div className="lg:flex lg:h-full lg:min-h-0 lg:flex-col">
@@ -123,7 +263,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
       <div className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-4 lg:px-8">
         <Link
           className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          href="/tickets"
+          href={`/tickets${listQuery}`}
         >
           <ArrowLeftIcon className="size-3.5" />
           All Tickets
@@ -136,11 +276,25 @@ export default async function AgentTicketDetailPage({ params }: Props) {
         <span className="min-w-0 truncate text-sm text-foreground">
           {ticket.subject}
         </span>
-        <span
-          className={`ml-auto inline-flex shrink-0 items-center rounded border px-2.5 py-1 text-xs font-medium ${COLOR_BADGE[statusMap[ticket.status]?.color ?? "slate"] ?? ""}`}
-        >
-          {statusMap[ticket.status]?.label ?? ticket.status}
-        </span>
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          <div className="flex items-center gap-1">
+            <TicketNavLink
+              direction="prev"
+              listQuery={listQuery}
+              ticketId={prevTicketId}
+            />
+            <TicketNavLink
+              direction="next"
+              listQuery={listQuery}
+              ticketId={nextTicketId}
+            />
+          </div>
+          <span
+            className={`inline-flex shrink-0 items-center rounded border px-2.5 py-1 text-xs font-medium ${COLOR_BADGE[statusMap[ticket.status]?.color ?? "slate"] ?? ""}`}
+          >
+            {statusMap[ticket.status]?.label ?? ticket.status}
+          </span>
+        </div>
       </div>
 
       {/* Two-column row — no gap and no padding on the row itself (Kanbanica
@@ -187,9 +341,19 @@ export default async function AgentTicketDetailPage({ params }: Props) {
 
             {/* Original description — customer's first message (left) */}
             <div className="flex justify-start gap-2">
-              <div className="size-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium shrink-0">
-                {getInitials(ticket.customerName)}
-              </div>
+              <CustomerProfilePopover
+                currentTicketId={ticket.id}
+                customerEmail={ticket.customerEmail}
+                customerId={ticket.customerId}
+                customerName={ticket.customerName}
+              >
+                <button
+                  className="size-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium shrink-0"
+                  type="button"
+                >
+                  {getInitials(ticket.customerName)}
+                </button>
+              </CustomerProfilePopover>
               <div className="min-w-0 max-w-[85%] wrap-break-word bg-accent rounded-xl border border-border p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-sm font-medium text-foreground">
@@ -233,14 +397,24 @@ export default async function AgentTicketDetailPage({ params }: Props) {
               const isCustomer = comment.authorRole === "customer";
               const commentAttachments =
                 attachmentsByComment.get(comment.id) ?? [];
-              const avatar = (
-                <div
-                  className={`size-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0 ${
-                    isCustomer
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-stone text-white"
-                  }`}
+              const avatarClassName = `size-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0 ${
+                isCustomer
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-stone text-white"
+              }`;
+              const avatar = isCustomer ? (
+                <CustomerProfilePopover
+                  currentTicketId={ticket.id}
+                  customerEmail={ticket.customerEmail}
+                  customerId={ticket.customerId}
+                  customerName={ticket.customerName}
                 >
+                  <button className={avatarClassName} type="button">
+                    {getInitials(comment.authorName)}
+                  </button>
+                </CustomerProfilePopover>
+              ) : (
+                <div className={avatarClassName}>
                   {getInitials(comment.authorName)}
                 </div>
               );
@@ -262,9 +436,6 @@ export default async function AgentTicketDetailPage({ params }: Props) {
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-sm font-medium text-foreground">
                         {comment.authorName}
-                      </span>
-                      <span className="text-xs text-muted-foreground capitalize">
-                        {comment.authorRole}
                       </span>
                       {comment.isInternal && (
                         <span className="flex items-center gap-1 text-xs text-amber-700 bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5">
@@ -334,6 +505,7 @@ export default async function AgentTicketDetailPage({ params }: Props) {
             customFields={customFields}
             isAdmin={session.role === ADMIN_ROLE}
             priorities={priorities}
+            slaSnapshot={slaSnapshot}
             statuses={statuses}
             tags={tags}
             ticket={ticket}

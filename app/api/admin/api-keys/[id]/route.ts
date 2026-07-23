@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { revokeApiKey, updateApiKey } from "@/lib/api-keys";
+import { audit } from "@/lib/audit";
 import { requireAdminFromRequest } from "@/lib/authz";
 
 // PATCH /api/admin/api-keys/:id — admin only. Partial update: only fields
@@ -61,8 +62,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let admin;
   try {
-    requireAdminFromRequest(request);
+    admin = requireAdminFromRequest(request);
   } catch (e) {
     return e as Response;
   }
@@ -75,6 +77,16 @@ export async function DELETE(
       { status: 404 }
     );
   }
+
+  await audit({
+    action: "api_key.revoked",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: `Revoked API key "${revoked.name}"`,
+    entityId: id,
+    entityType: "api_key",
+    metadata: { name: revoked.name, keyPrefix: revoked.keyPrefix },
+  });
 
   return NextResponse.json({ ok: true });
 }

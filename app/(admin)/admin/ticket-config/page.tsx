@@ -1,3 +1,4 @@
+import { getSlaPolicies } from "@/lib/sla-policies";
 import {
   getTicketCategories,
   getTicketPriorities,
@@ -5,15 +6,17 @@ import {
 } from "@/lib/ticket-config";
 import { CategoriesManager } from "./_components/categories-manager";
 import { PrioritiesManager } from "./_components/priorities-manager";
+import { SlaPoliciesManager } from "./_components/sla-policies-manager";
 import { StatusesManager } from "./_components/statuses-manager";
 
 export const metadata = { title: "Ticket Config" };
 
 export default async function TicketConfigPage() {
-  const [statuses, categories, priorities] = await Promise.all([
+  const [statuses, categories, priorities, slaPolicies] = await Promise.all([
     getTicketStatuses(),
     getTicketCategories(),
     getTicketPriorities(),
+    getSlaPolicies(),
   ]);
 
   return (
@@ -21,6 +24,11 @@ export default async function TicketConfigPage() {
       <StatusesManager initialStatuses={statuses} />
       <CategoriesManager initialCategories={categories} />
       <PrioritiesManager initialPriorities={priorities} />
+      <SlaPoliciesManager
+        categories={categories}
+        initialPolicies={slaPolicies}
+        priorities={priorities}
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { ADMIN_ROLE } from "@/config/platform";
 import { user } from "@/db/schema";
 import { requireAdmin } from "@/lib/authz";
 import { db } from "@/lib/db";
+import { getPlatformSettings } from "@/lib/settings";
 import { InviteUserDialog } from "./_components/invite-user-dialog";
 import { UserActions } from "./_components/user-actions";
 import { UserSearch } from "./_components/user-search";
@@ -54,6 +55,7 @@ async function UsersResults({
 }) {
   const search = (params.q ?? "").trim();
   const page = Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1);
+  const settings = await getPlatformSettings();
 
   const where = search
     ? or(ilike(user.name, `%${search}%`), ilike(user.email, `%${search}%`))
@@ -186,6 +188,7 @@ async function UsersResults({
                     <td className="px-4 py-3">
                       <UserActions
                         isCurrentUser={u.id === currentUserId}
+                        passwordResetEnabled={settings.passwordLoginEnabled}
                         userBanned={u.banned}
                         userEmail={u.email}
                         userId={u.id}

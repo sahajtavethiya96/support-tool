@@ -36,6 +36,18 @@ function actionBadgeClass(action: string) {
   if (action.startsWith("canned_response.")) {
     return "bg-purple-50 border-purple-200 text-purple-700";
   }
+  if (
+    action.startsWith("ticket_config.") ||
+    action.startsWith("sla_policy.") ||
+    action.startsWith("custom_field.") ||
+    action.startsWith("email_template.") ||
+    action.startsWith("settings.")
+  ) {
+    return "bg-orange-50 border-orange-200 text-orange-700";
+  }
+  if (action.startsWith("api_key.")) {
+    return "bg-red-50 border-red-200 text-red-700";
+  }
   return "bg-muted/20 border-border text-muted-foreground";
 }
 

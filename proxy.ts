@@ -75,6 +75,7 @@ export const config = {
     "/api/account/:path*",
     "/api/notifications/:path*",
     "/api/canned-responses/:path*",
+    "/api/customers/:path*",
     // NOTE: /api/pusher/* is NOT here — it must allow anonymous customer
     // requests (token-based, no session) alongside agent/admin requests, so
     // it does its own auth check directly (see app/api/pusher/auth/route.ts).

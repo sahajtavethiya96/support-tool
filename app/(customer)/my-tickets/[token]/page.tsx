@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BrandMark } from "@/components/common/brand-mark";
 import { LocalDateTime } from "@/components/common/local-datetime";
-import { tickets } from "@/db/schema";
+import { customers, tickets } from "@/db/schema";
 import { verifyEmailToken } from "@/lib/customer-access";
 import { db } from "@/lib/db";
 import {
@@ -27,24 +27,28 @@ export default async function MyTicketsListPage({ params }: Props) {
     notFound();
   }
 
-  const [rows, statuses, categories, settings] = await Promise.all([
-    db
-      .select({
-        id: tickets.id,
-        ticketNumber: tickets.ticketNumber,
-        subject: tickets.subject,
-        status: tickets.status,
-        category: tickets.category,
-        customerToken: tickets.customerToken,
-        createdAt: tickets.createdAt,
-      })
-      .from(tickets)
-      .where(eq(tickets.customerEmail, email))
-      .orderBy(desc(tickets.createdAt)),
+  const [[customer], statuses, categories, settings] = await Promise.all([
+    db.select({ id: customers.id }).from(customers).where(eq(customers.email, email)).limit(1),
     getTicketStatuses(),
     getTicketCategories(),
     getPlatformSettings(),
   ]);
+
+  const rows = customer
+    ? await db
+        .select({
+          id: tickets.id,
+          ticketNumber: tickets.ticketNumber,
+          subject: tickets.subject,
+          status: tickets.status,
+          category: tickets.category,
+          customerToken: tickets.customerToken,
+          createdAt: tickets.createdAt,
+        })
+        .from(tickets)
+        .where(eq(tickets.customerId, customer.id))
+        .orderBy(desc(tickets.createdAt))
+    : [];
   const brandName = resolveBrandName(settings.brandName);
   const logoUrl = resolveLogoUrl(settings.logoKey);
 

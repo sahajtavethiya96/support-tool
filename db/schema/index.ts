@@ -1,5 +1,6 @@
 export * from "@/db/schema/api-keys";
 export * from "@/db/schema/auth";
+export * from "@/db/schema/customers";
 export * from "@/db/schema/tickets";
 export * from "@/db/schema/settings";
 export * from "@/db/schema/email-outbox";
@@ -16,3 +17,4 @@ export * from "@/db/schema/custom-fields";
 export * from "@/db/schema/email-templates";
 export * from "@/db/schema/webhooks";
 export * from "@/db/schema/webhook-deliveries";
+export * from "@/db/schema/sla-policies";

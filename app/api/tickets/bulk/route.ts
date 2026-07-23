@@ -1,16 +1,24 @@
 import { createId } from "@paralleldrive/cuid2";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { ADMIN_ROLE } from "@/config/platform";
-import { ticketActivity, ticketAttachments, tickets, user } from "@/db/schema";
+import {
+  ticketActivity,
+  ticketAttachments,
+  tickets,
+  ticketTags,
+  user,
+} from "@/db/schema";
 import { audit } from "@/lib/audit";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
-import { getTicketStatuses } from "@/lib/ticket-config";
+import { getOrCreateTagId, normalizeTagName } from "@/lib/tags";
+import { getTicketPriorities, getTicketStatuses } from "@/lib/ticket-config";
 
 const MAX_BULK_IDS = 200;
+const MAX_TAG_LENGTH = 50;
 
 // /api/tickets/* is not covered by the proxy.ts middleware matcher, so we
 // check the session directly here (same pattern as app/api/tickets/[id]/route.ts)
@@ -23,8 +31,9 @@ async function requireAdminSession(request: NextRequest) {
   return session;
 }
 
-// PATCH /api/tickets/bulk — admin only. Bulk-assign or bulk-change-status.
-// body: { ids: string[], action: "assign" | "status", value: string | null }
+// PATCH /api/tickets/bulk — admin only. Bulk-assign, bulk-change-status,
+// bulk-change-priority, or bulk-add-tag.
+// body: { ids: string[], action: "assign" | "status" | "priority" | "tag", value: string | null }
 export async function PATCH(request: NextRequest) {
   const session = await requireAdminSession(request);
   if (!session) {
@@ -37,7 +46,7 @@ export async function PATCH(request: NextRequest) {
 
   let body: {
     ids?: string[];
-    action?: "assign" | "status";
+    action?: "assign" | "status" | "priority" | "tag";
     value?: string | null;
   } = {};
   try {
@@ -149,6 +158,100 @@ export async function PATCH(request: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, count: ids.length });
+  }
+
+  if (body.action === "priority") {
+    const validPriorities = await getTicketPriorities();
+    const priorityRow = validPriorities.find((p) => p.slug === body.value);
+    if (!priorityRow) {
+      return NextResponse.json({ error: "Invalid priority." }, { status: 400 });
+    }
+
+    await db
+      .update(tickets)
+      .set({ priority: priorityRow.slug, updatedAt: now })
+      .where(inArray(tickets.id, ids));
+
+    await db.insert(ticketActivity).values(
+      ids.map((ticketId) => ({
+        id: createId(),
+        ticketId,
+        actorId,
+        actorName,
+        actorRole,
+        action: "priority_changed",
+        metadata: { to: priorityRow.slug },
+        createdAt: now,
+      }))
+    );
+
+    await audit({
+      action: "ticket.bulk_update",
+      actorId,
+      actorEmail: session.user.email,
+      description: `Bulk-changed priority to "${priorityRow.label}" for ${ids.length} ticket(s)`,
+      entityType: "ticket",
+      metadata: { ticketIds: ids, action: "priority", value: priorityRow.slug },
+    });
+
+    return NextResponse.json({ ok: true, count: ids.length });
+  }
+
+  if (body.action === "tag") {
+    const name = normalizeTagName(body.value ?? "");
+    if (!name) {
+      return NextResponse.json(
+        { error: "Tag name is required." },
+        { status: 400 }
+      );
+    }
+    if (name.length > MAX_TAG_LENGTH) {
+      return NextResponse.json(
+        { error: `Tag name must be ${MAX_TAG_LENGTH} characters or fewer.` },
+        { status: 400 }
+      );
+    }
+
+    const tagId = await getOrCreateTagId(name);
+
+    // Skip tickets that already have this tag — avoids a unique-constraint
+    // violation on (ticketId, tagId) and keeps re-applying a tag a no-op.
+    const existingLinks = await db
+      .select({ ticketId: ticketTags.ticketId })
+      .from(ticketTags)
+      .where(and(inArray(ticketTags.ticketId, ids), eq(ticketTags.tagId, tagId)));
+    const alreadyTagged = new Set(existingLinks.map((r) => r.ticketId));
+    const newTicketIds = ids.filter((id) => !alreadyTagged.has(id));
+
+    if (newTicketIds.length > 0) {
+      await db.insert(ticketTags).values(
+        newTicketIds.map((ticketId) => ({ id: createId(), ticketId, tagId }))
+      );
+
+      await db.insert(ticketActivity).values(
+        newTicketIds.map((ticketId) => ({
+          id: createId(),
+          ticketId,
+          actorId,
+          actorName,
+          actorRole,
+          action: "tag_added",
+          metadata: { tag: name },
+          createdAt: now,
+        }))
+      );
+    }
+
+    await audit({
+      action: "ticket.bulk_update",
+      actorId,
+      actorEmail: session.user.email,
+      description: `Bulk-tagged ${newTicketIds.length} ticket(s) with "${name}"`,
+      entityType: "ticket",
+      metadata: { ticketIds: ids, action: "tag", value: name },
+    });
+
+    return NextResponse.json({ ok: true, count: newTicketIds.length });
   }
 
   return NextResponse.json({ error: "Invalid action." }, { status: 400 });

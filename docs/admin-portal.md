@@ -26,6 +26,7 @@ Access requires a session with `role: admin`.
 | Assign / change user roles | No | **Yes** |
 | Ban / unban users | No | **Yes** |
 | Promote to admin | No | **Yes** (or via CLI) |
+| View cross-agent reports (`/admin/reports`) | No | **Yes** |
 
 ---
 
@@ -50,6 +51,7 @@ Search by name or email.
 | Action | Description |
 |--------|-------------|
 | Change Role | Set to `agent` or `admin` |
+| Reset Password | Directly set a new password for the user — no old password required, nothing emailed. Only shown when password sign-in is enabled. |
 | Ban User | Immediately revokes all sessions. User cannot sign in. Optionally enter a ban reason. |
 | Unban User | Restores sign-in access. |
 | Delete User | Hard delete — removes user record and their sessions. Their tickets remain unassigned. Their comment `authorName` is preserved as their name at time of deletion. |
@@ -60,6 +62,13 @@ Search by name or email.
 2. A small popover/dialog appears: "Set role for [name]" — radio: Agent / Admin.
 3. Confirm.
 4. Role updated immediately. If the user is currently signed in, their next request will reflect the new role (session is not revoked — role is read from DB on each request).
+
+### Reset Password Flow
+
+1. Admin clicks "Reset Password" on a user row (hidden if password sign-in is disabled platform-wide).
+2. Dialog: enter a new password (min 8 characters) and confirm it.
+3. Confirm. The user's password is updated immediately — no email is sent, so the admin must share the new password with the user themselves.
+4. The user's existing sessions are unaffected; they keep using the app until they next sign out, then sign back in with the new password.
 
 ### Ban Flow
 
@@ -139,7 +148,28 @@ Same pattern as statuses, minus the `isDefault` and `isClosedState` flags.
 
 **Delete Category** — blocked if any tickets currently use this category slug.
 
-### 3c. Color Presets
+### 3c. SLA Policies
+
+Displays all SLA policies in `sortOrder` order. Each policy has a name, an optional priority/category scope (both default to "Any"), and three targets in minutes: First Response, Next Response, Resolution. See `docs/tickets.md` § SLA for the full model (scoping precedence, the three metrics, pause/resume behavior).
+
+Each policy row shows:
+- Name + scope (e.g. "Any priority · Any category", "Urgent · Billing")
+- **Default** badge (if `isDefault = true`)
+- The three targets, formatted (e.g. "1h 30m")
+- Edit + Delete buttons
+
+**Add/Edit Policy** — a form/dialog with:
+- Name (text input)
+- Priority scope (select: Any + each configured priority)
+- Category scope (select: Any + each configured category)
+- First Response / Next Response / Resolution (minute inputs)
+- Mark as default (checkbox — only enabled when both scope selects are "Any"; only an unscoped policy can be the global fallback)
+
+**Delete Policy** — blocked if it is the current default policy (set another policy as default first). Unlike statuses/categories, there's no "tickets currently use this" check — policies aren't referenced by id on `tickets`, they're resolved live by matching priority/category.
+
+**Setting a new default** — when admin marks a policy as default, the previous default is automatically unset, same pattern as statuses/priorities.
+
+### 3d. Color Presets
 
 Both statuses and categories use a fixed set of named color presets for badge styling. Stored as a color name in the DB, resolved to Tailwind classes at render time via `COLOR_BADGE` in `lib/tickets.ts`:
 
@@ -156,13 +186,48 @@ Both statuses and categories use a fixed set of named color presets for badge st
 | `pink` | `bg-pink-50 text-pink-700 border-pink-200` |
 | `indigo` | `bg-indigo-50 text-indigo-700 border-indigo-200` |
 
-### 3d. Seeding Defaults
+### 3e. Seeding Defaults
 
-On a fresh install, run `pnpm seed` to populate `ticket_statuses` and `ticket_categories` with the default values documented in `docs/tickets.md`. This is idempotent — it skips rows that already exist by slug.
+On a fresh install, run `pnpm seed` to populate `ticket_statuses`, `ticket_categories`, `ticket_priorities`, and a default `sla_policies` row with the default values documented in `docs/tickets.md`. This is idempotent — it skips rows that already exist (by slug for statuses/categories/priorities, by a fixed id for the seeded SLA policy).
 
 ---
 
-## 4. Admin Access to Orbit Panel
+## 4. Reports (`/admin/reports`)
+
+Admin-only — the only place in the app that compares agents against each other, which is why it's gated to admin rather than shared with the agent dashboard (`/dashboard`, which stays identical for agents and admins). Answers "who's busy, and how fast are we?"
+
+A range toggle (**Last 30 days** / **Last 90 days** / **All time**, default 30 days) applies to every report below and to its CSV export, filtered on ticket creation date.
+
+### 4a. Tickets per Agent
+
+One row per agent (by *current* assignment — not reassignment history) plus an **Unassigned** row: Total tickets, Open tickets, Avg First Response, Avg Resolution.
+
+- **Avg First Response** — average time from ticket creation to that agent's first public reply (`tickets.firstRespondedAt - tickets.createdAt`).
+- **Avg Resolution** — average `tickets.slaActiveSeconds` (accumulated agent-active time toward resolution — already excludes time spent waiting on the customer, see `docs/tickets.md` § SLA) across that agent's closed tickets. This is a materially better "how fast do we resolve" number than a naive `closedAt - createdAt`, since it doesn't penalize an agent for a customer who took 3 days to reply.
+- Both averages are blank ("—") for an agent with no qualifying tickets yet (no replies sent / no tickets closed) in the selected range.
+
+### 4b. Tickets by Category / Priority / Tag
+
+Three breakdown tables — Category and Priority show count + share of total; Tag shows count only (a ticket can have multiple tags, so tag shares wouldn't sum to 100%) and is capped to the **top 20 tags** by ticket count (tags are an unbounded freeform pool — see `docs/tickets.md` § Tags).
+
+### 4c. CSV Export
+
+Every report has its own "Download CSV" link — a plain download, no dialog or client-side processing. Respects the current range selection. Time columns in the CSV are raw seconds (not formatted "2h 15m" strings) — a CSV is for further spreadsheet analysis, where raw numbers are more useful than pre-formatted text.
+
+---
+
+## 5. Audit Log (`/admin/audit-log`)
+
+A system-wide, admin-only trail of sensitive actions — separate from `ticket_activity` (which is per-ticket and shown in the ticket detail sidebar; see `docs/tickets.md`). Newest first, paginated 25 per page.
+
+Logged today: user role changes/bans/deletes, ticket deletion (single and bulk), ticket bulk actions, every ticket-config change (statuses/categories/priorities/SLA policies/custom fields), email template edits, platform/appearance settings changes (including the sign-in method toggles), API key create/revoke, plus all the auth/profile/session events from the Better Auth side. See `docs/plans/07-audit-log-viewer.md`'s addendum for the full list and the reasoning behind what's deliberately *not* logged (read-only routes, field-level renames that don't change access or config).
+
+- **Search** — matches `description` or `actorEmail` (`ilike`).
+- **Action filter** — a dropdown populated from a live `SELECT DISTINCT action` over the table itself, not a hardcoded list, so it can never miss an action type that's actually been logged.
+- Click a row with metadata to expand the raw JSON — useful for debugging without a dedicated column per possible shape.
+- Failing to write an audit entry never breaks the action it's describing — `audit()` swallows its own errors (logged to the server console) rather than throwing.
+
+## 6. Admin Access to Orbit Panel
 
 Admins also have access to the Better Auth Orbit panel at `/orbit`:
 - View all user sessions.
@@ -174,7 +239,7 @@ This is provided by the scaffold — no custom implementation needed.
 
 ---
 
-## 5. Business Rules
+## 7. Business Rules
 
 1. There must always be at least one admin in the system. Prevent the last admin from being demoted or deleted.
 2. An admin cannot ban themselves.
@@ -186,9 +251,9 @@ This is provided by the scaffold — no custom implementation needed.
 
 ---
 
-## 6. UI Notes
+## 8. UI Notes
 
-- Admin-only items (Delete Ticket button, Users nav link) are conditionally rendered based on `session.user.role === 'admin'`.
-- The Users page (`/admin/users`) is not linked in the agent sidebar — only visible to admins.
+- Admin-only items (Delete Ticket button, Users/Reports nav links) are conditionally rendered based on `session.user.role === 'admin'`.
+- The Users and Reports pages (`/admin/users`, `/admin/reports`) are not linked in the agent sidebar — only visible to admins.
 - Destructive actions (delete ticket, delete user, ban user) always use shadcn `Dialog` with explicit confirmation — never `window.confirm()`.
 - Use Phosphor Icons: `TrashIcon` for delete, `ProhibitIcon` for ban, `ShieldCheckIcon` for admin role.

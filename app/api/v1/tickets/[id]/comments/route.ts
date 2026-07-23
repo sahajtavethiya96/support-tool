@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { ADMIN_ROLE, AGENT_ROLE } from "@/config/platform";
 import {
+  customers,
   ticketActivity,
   ticketAttachments,
   ticketComments,
@@ -24,6 +25,7 @@ import {
   richTextToPlainText,
   textToRichTextJson,
 } from "@/lib/rich-text";
+import { computeSlaTransition } from "@/lib/sla";
 import { storage } from "@/lib/storage";
 import { isClosedStatusSlug } from "@/lib/ticket-config";
 import {
@@ -201,15 +203,18 @@ export async function POST(
   const [ticket] = await db
     .select({
       status: tickets.status,
-      customerName: tickets.customerName,
-      customerEmail: tickets.customerEmail,
+      customerName: customers.name,
+      customerEmail: customers.email,
       ticketNumber: tickets.ticketNumber,
       subject: tickets.subject,
       category: tickets.category,
       priority: tickets.priority,
       assignedAgentId: tickets.assignedAgentId,
+      awaitingReply: tickets.awaitingReply,
+      waitingSince: tickets.waitingSince,
     })
     .from(tickets)
+    .innerJoin(customers, eq(tickets.customerId, customers.id))
     .where(eq(tickets.id, ticketId))
     .limit(1);
   if (!ticket) {
@@ -285,13 +290,20 @@ export async function POST(
       );
     }
 
-    // A customer reply puts the ticket back into "awaiting reply".
+    // A customer reply puts the ticket back into "awaiting reply". SLA
+    // pause/resume (lib/sla.ts) rides the same signal.
+    const slaUpdate = computeSlaTransition(
+      { awaitingReply: ticket.awaitingReply, waitingSince: ticket.waitingSince },
+      true,
+      now
+    );
     await db
       .update(tickets)
       .set({
         updatedAt: now,
         awaitingReply: true,
         pendingReplies: sql`${tickets.pendingReplies} + 1`,
+        ...slaUpdate,
       })
       .where(eq(tickets.id, ticketId));
 

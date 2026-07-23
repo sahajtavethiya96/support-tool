@@ -2,7 +2,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { desc, eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { tickets } from "@/db/schema";
+import { customers, tickets } from "@/db/schema";
 import { requireApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -38,19 +38,27 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const rows = await db
-    .select({
-      id: tickets.id,
-      ticketNumber: tickets.ticketNumber,
-      subject: tickets.subject,
-      status: tickets.status,
-      createdAt: tickets.createdAt,
-      updatedAt: tickets.updatedAt,
-    })
-    .from(tickets)
-    .where(eq(tickets.customerEmail, email))
-    .orderBy(desc(tickets.createdAt))
-    .limit(LIST_LIMIT);
+  const [customer] = await db
+    .select({ id: customers.id })
+    .from(customers)
+    .where(eq(customers.email, email.toLowerCase()))
+    .limit(1);
+
+  const rows = customer
+    ? await db
+        .select({
+          id: tickets.id,
+          ticketNumber: tickets.ticketNumber,
+          subject: tickets.subject,
+          status: tickets.status,
+          createdAt: tickets.createdAt,
+          updatedAt: tickets.updatedAt,
+        })
+        .from(tickets)
+        .where(eq(tickets.customerId, customer.id))
+        .orderBy(desc(tickets.createdAt))
+        .limit(LIST_LIMIT)
+    : [];
 
   return NextResponse.json({ tickets: rows });
 }

@@ -2,12 +2,13 @@ import { createId } from "@paralleldrive/cuid2";
 import { eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { ticketActivity, tickets } from "@/db/schema";
+import { customers, ticketActivity, tickets } from "@/db/schema";
 import { requireApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { enqueueEmail } from "@/lib/email";
 import { ticketClosedTemplate } from "@/lib/email/templates/ticket-closed";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { computeSlaTransition } from "@/lib/sla";
 import {
   getClosedStatus,
   getDefaultStatus,
@@ -82,7 +83,16 @@ export async function PATCH(
   if (!ticket) {
     return NextResponse.json({ error: "Ticket not found." }, { status: 404 });
   }
-  if (ticket.customerEmail.trim().toLowerCase() !== email) {
+
+  const [customer] = await db
+    .select({ name: customers.name, email: customers.email })
+    .from(customers)
+    .where(eq(customers.id, ticket.customerId))
+    .limit(1);
+  if (!customer) {
+    return NextResponse.json({ error: "Ticket not found." }, { status: 404 });
+  }
+  if (customer.email.trim().toLowerCase() !== email) {
     return NextResponse.json(
       { error: "This ticket does not belong to that email." },
       { status: 403 }
@@ -108,6 +118,12 @@ export async function PATCH(
     }
 
     const previousStatus = ticket.status;
+    const slaUpdate = computeSlaTransition(
+      { awaitingReply: ticket.awaitingReply, waitingSince: ticket.waitingSince },
+      false,
+      now,
+      "closing"
+    );
     await db
       .update(tickets)
       .set({
@@ -116,6 +132,7 @@ export async function PATCH(
         updatedAt: now,
         awaitingReply: false,
         pendingReplies: 0,
+        ...slaUpdate,
       })
       .where(eq(tickets.id, ticketId));
 
@@ -123,7 +140,7 @@ export async function PATCH(
       id: createId(),
       ticketId,
       actorId: null,
-      actorName: ticket.customerName,
+      actorName: customer.name,
       actorRole: "customer",
       action: "ticket_closed",
       metadata: { from: previousStatus, to: closedStatus.slug },
@@ -139,8 +156,8 @@ export async function PATCH(
         status: closedStatus.slug,
         priority: ticket.priority,
         category: ticket.category,
-        customerName: ticket.customerName,
-        customerEmail: ticket.customerEmail,
+        customerName: customer.name,
+        customerEmail: customer.email,
         createdAt: ticket.createdAt,
         updatedAt: now,
       },
@@ -154,14 +171,14 @@ export async function PATCH(
       ticket.apiKeyId
     );
     ticketClosedTemplate({
-      customerName: ticket.customerName,
+      customerName: customer.name,
       ticketNumber: ticket.ticketNumber,
       ticketSubject: ticket.subject,
       ticketUrl,
     })
       .then(({ subject: emailSubject, html, text }) =>
         enqueueEmail({
-          to: ticket.customerEmail,
+          to: customer.email,
           subject: emailSubject,
           html,
           text,
@@ -189,6 +206,12 @@ export async function PATCH(
 
   const previousStatus = ticket.status;
   // A customer reopening needs the team's attention again.
+  const slaUpdate = computeSlaTransition(
+    { awaitingReply: ticket.awaitingReply, waitingSince: ticket.waitingSince },
+    true,
+    now,
+    "reopening"
+  );
   await db
     .update(tickets)
     .set({
@@ -197,6 +220,7 @@ export async function PATCH(
       updatedAt: now,
       awaitingReply: true,
       pendingReplies: 1,
+      ...slaUpdate,
     })
     .where(eq(tickets.id, ticketId));
 
@@ -204,7 +228,7 @@ export async function PATCH(
     id: createId(),
     ticketId,
     actorId: null,
-    actorName: ticket.customerName,
+    actorName: customer.name,
     actorRole: "customer",
     action: "ticket_reopened",
     metadata: { from: previousStatus, to: defaultStatus.slug },
@@ -220,8 +244,8 @@ export async function PATCH(
       status: defaultStatus.slug,
       priority: ticket.priority,
       category: ticket.category,
-      customerName: ticket.customerName,
-      customerEmail: ticket.customerEmail,
+      customerName: customer.name,
+      customerEmail: customer.email,
       createdAt: ticket.createdAt,
       updatedAt: now,
     },

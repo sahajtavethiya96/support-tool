@@ -7,11 +7,15 @@ kind of thing they reach for after something unexpected happens (a user
 banned, a session revoked, an account deleted) — right now that data is
 invisible without a raw SQL query.
 
-Confirmed currently-logged action types (from `audit()` call sites): `
-auth.logout`, `auth.magic_link_sent`, `orbit.user_role_updated`,
-`profile.name_updated`, `profile.email_updated`, `profile.session_revoked`,
-`profile.other_sessions_revoked`, `profile.account_deleted`,
-`profile.data_exported`, `user.created`.
+Confirmed currently-logged action types at the time this plan was written
+(from `audit()` call sites): `auth.logout`, `auth.magic_link_sent`,
+`orbit.user_role_updated`, `profile.name_updated`, `profile.email_updated`,
+`profile.session_revoked`, `profile.other_sessions_revoked`,
+`profile.account_deleted`, `profile.data_exported`, `user.created`. Coverage
+was significantly expanded later — see "Addendum: closing the coverage gaps"
+below for the current, much larger set. The filter's dropdown no longer
+tracks a hardcoded list at all (see the addendum) — this list is frozen here
+as a historical snapshot, not something to keep updating.
 
 (Note: ticket lifecycle events — status changes, replies, assignment — are
 a **separate** table, `ticket_activity`, already visible in the ticket
@@ -101,3 +105,59 @@ dedicated column per possible metadata shape.
 - Surfacing `ticket_activity` in this same screen — that data already has
   its own home in the ticket detail sidebar and is per-ticket, not
   system-wide.
+
+---
+
+## Addendum: closing the coverage gaps
+
+The viewer itself worked correctly from day one — the "All Actions" filter's
+WHERE-clause wiring (`eq(auditLogs.action, action)`) was never broken. Two
+real problems surfaced once the app grew past the original 10 action types:
+
+1. **Sparse coverage.** Most admin mutations never called `audit()` at all —
+   role changes and bans/deletes via the main `/admin/users` UI, every
+   ticket-config CRUD route (statuses/categories/priorities/SLA
+   policies/custom fields), email templates, platform/appearance settings,
+   API key create/revoke, and single-ticket deletion. Only the Better Auth
+   Orbit-panel actions (`orbit.*`) and ticket bulk actions were audited on
+   the main paths admins actually use day-to-day.
+2. **A self-defeating dropdown.** The filter's option list
+   (`audit-log-actions.ts`'s `AUDIT_ACTIONS`) was a hand-maintained array
+   with its own comment warning "update this whenever a new `audit()` call
+   site is added" — nobody did, so newly-added action types (e.g.
+   `user.password_set_by_admin`, `orbit.user_banned`) existed in the data
+   but couldn't be selected from the dropdown.
+
+**Fix for #2 — made structural, not just patched:** `page.tsx` now runs
+`SELECT DISTINCT action FROM audit_logs` and passes the live result to
+`AuditLogFilters` as its `actions` prop, instead of importing the static
+list. `AUDIT_ACTIONS` still exists, but purely as a label lookup
+(`getAuditActionLabel`) for pretty display — an action with no entry there
+just shows its raw slug, which was already the fallback behavior. The
+dropdown can now never drift out of sync with reality again, by
+construction.
+
+**Fix for #1 — filled in every gap**, following the existing dot-namespaced
+`{subsystem}.{verb}_{noun}` convention:
+
+| Area | Actions added |
+|---|---|
+| Users (main admin UI) | `user.role_updated`, `user.banned`, `user.unbanned`, `user.deleted` |
+| Tickets | `ticket.deleted` (single-ticket; bulk delete/update were already covered) |
+| Ticket config | `ticket_config.status_created/updated/deleted`, `ticket_config.category_created/updated/deleted`, `ticket_config.priority_created/updated/deleted` |
+| SLA policies | `sla_policy.created/updated/deleted` |
+| Custom fields | `custom_field.created/updated/deleted` |
+| Email templates | `email_template.updated` |
+| Platform settings | `settings.updated` (theme, appearance mode, brand, and — notably — the password/magic-link/Google sign-in toggles) |
+| API keys | `api_key.created`, `api_key.revoked` |
+
+`actionBadgeClass` (`audit-log-table.tsx`) got two new color buckets: an
+orange bucket for all the config-change prefixes above (`ticket_config.*`,
+`sla_policy.*`, `custom_field.*`, `email_template.*`, `settings.*`) and a red
+bucket for `api_key.*` (creating/revoking API access is the most
+security-sensitive action category in the app).
+
+Deliberately **not** logged: read-only routes, and PATCH-only field renames
+that don't change access or configuration (e.g. renaming an API key's label
+without touching its scope) — the bar is "did this change something another
+admin would need to know about," not every field-level write.

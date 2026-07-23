@@ -3,7 +3,8 @@ import { eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { ADMIN_ROLE } from "@/config/platform";
-import { ticketActivity, ticketAttachments, tickets } from "@/db/schema";
+import { customers, ticketActivity, ticketAttachments, tickets } from "@/db/schema";
+import { audit } from "@/lib/audit";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
@@ -47,14 +48,16 @@ export async function GET(
       category: tickets.category,
       status: tickets.status,
       priority: tickets.priority,
-      customerName: tickets.customerName,
-      customerEmail: tickets.customerEmail,
+      customerId: tickets.customerId,
+      customerName: customers.name,
+      customerEmail: customers.email,
       assignedAgentId: tickets.assignedAgentId,
       closedAt: tickets.closedAt,
       createdAt: tickets.createdAt,
       updatedAt: tickets.updatedAt,
     })
     .from(tickets)
+    .innerJoin(customers, eq(tickets.customerId, customers.id))
     .where(eq(tickets.id, id))
     .limit(1);
 
@@ -97,6 +100,15 @@ export async function PATCH(
     .where(eq(tickets.id, ticketId))
     .limit(1);
   if (!ticket) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  const [customer] = await db
+    .select({ name: customers.name, email: customers.email })
+    .from(customers)
+    .where(eq(customers.id, ticket.customerId))
+    .limit(1);
+  if (!customer) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
@@ -153,8 +165,8 @@ export async function PATCH(
         status: newStatus,
         priority: ticket.priority,
         category: ticket.category,
-        customerName: ticket.customerName,
-        customerEmail: ticket.customerEmail,
+        customerName: customer.name,
+        customerEmail: customer.email,
         createdAt: ticket.createdAt,
         updatedAt: now,
       },
@@ -197,8 +209,8 @@ export async function PATCH(
         status: ticket.status,
         priority: ticket.priority,
         category: newCategory,
-        customerName: ticket.customerName,
-        customerEmail: ticket.customerEmail,
+        customerName: customer.name,
+        customerEmail: customer.email,
         createdAt: ticket.createdAt,
         updatedAt: now,
       }),
@@ -240,8 +252,8 @@ export async function PATCH(
         status: ticket.status,
         priority: newPriority,
         category: ticket.category,
-        customerName: ticket.customerName,
-        customerEmail: ticket.customerEmail,
+        customerName: customer.name,
+        customerEmail: customer.email,
         createdAt: ticket.createdAt,
         updatedAt: now,
       }),
@@ -282,8 +294,8 @@ export async function PATCH(
             status: ticket.status,
             priority: ticket.priority,
             category: ticket.category,
-            customerName: ticket.customerName,
-            customerEmail: ticket.customerEmail,
+            customerName: customer.name,
+            customerEmail: customer.email,
             createdAt: ticket.createdAt,
             updatedAt: now,
           }),
@@ -333,6 +345,16 @@ export async function DELETE(
 
   // Delete ticket (cascade removes comments, activity, attachments)
   await db.delete(tickets).where(eq(tickets.id, ticketId));
+
+  await audit({
+    action: "ticket.deleted",
+    actorEmail: session.user.email,
+    actorId: session.user.id,
+    description: `Deleted ticket #${ticket.ticketNumber}`,
+    entityId: ticketId,
+    entityType: "ticket",
+    metadata: { ticketNumber: ticket.ticketNumber },
+  });
 
   return NextResponse.json({ ok: true });
 }

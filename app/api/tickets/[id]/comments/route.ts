@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { ADMIN_ROLE, AGENT_ROLE } from "@/config/platform";
 import {
+  customers,
   ticketActivity,
   ticketAttachments,
   ticketComments,
@@ -20,6 +21,7 @@ import { publishPushToUsers } from "@/lib/push";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { publishTicketCommentCreated } from "@/lib/realtime";
 import { isRichTextEmpty, richTextToPlainText } from "@/lib/rich-text";
+import { computeSlaTransition } from "@/lib/sla";
 import { storage } from "@/lib/storage";
 import { isClosedStatusSlug } from "@/lib/ticket-config";
 import { resolveTicketPortalUrl } from "@/lib/tickets/portal-url";
@@ -87,6 +89,9 @@ export async function POST(
         priority: string;
         assignedAgentId: string | null;
         apiKeyId: string | null;
+        awaitingReply: boolean;
+        waitingSince: Date | null;
+        firstRespondedAt: Date | null;
       }
     | undefined;
 
@@ -114,8 +119,8 @@ export async function POST(
     const [ticket] = await db
       .select({
         status: tickets.status,
-        customerName: tickets.customerName,
-        customerEmail: tickets.customerEmail,
+        customerName: customers.name,
+        customerEmail: customers.email,
         customerToken: tickets.customerToken,
         ticketNumber: tickets.ticketNumber,
         subject: tickets.subject,
@@ -123,8 +128,12 @@ export async function POST(
         priority: tickets.priority,
         assignedAgentId: tickets.assignedAgentId,
         apiKeyId: tickets.apiKeyId,
+        awaitingReply: tickets.awaitingReply,
+        waitingSince: tickets.waitingSince,
+        firstRespondedAt: tickets.firstRespondedAt,
       })
       .from(tickets)
+      .innerJoin(customers, eq(tickets.customerId, customers.id))
       .where(and(eq(tickets.id, ticketId), eq(tickets.customerToken, token)))
       .limit(1);
     if (!ticket) {
@@ -160,8 +169,8 @@ export async function POST(
     const [ticket] = await db
       .select({
         status: tickets.status,
-        customerName: tickets.customerName,
-        customerEmail: tickets.customerEmail,
+        customerName: customers.name,
+        customerEmail: customers.email,
         customerToken: tickets.customerToken,
         ticketNumber: tickets.ticketNumber,
         subject: tickets.subject,
@@ -169,8 +178,12 @@ export async function POST(
         priority: tickets.priority,
         assignedAgentId: tickets.assignedAgentId,
         apiKeyId: tickets.apiKeyId,
+        awaitingReply: tickets.awaitingReply,
+        waitingSince: tickets.waitingSince,
+        firstRespondedAt: tickets.firstRespondedAt,
       })
       .from(tickets)
+      .innerJoin(customers, eq(tickets.customerId, customers.id))
       .where(eq(tickets.id, ticketId))
       .limit(1);
     if (!ticket) {
@@ -285,9 +298,31 @@ export async function POST(
           }
         : { awaitingReply: false, pendingReplies: 0 };
 
+    // SLA pause/resume (see lib/sla.ts) rides the same awaitingReply signal.
+    // Internal notes don't affect it, matching awaitingUpdate above.
+    const slaUpdate = isInternal
+      ? {}
+      : computeSlaTransition(
+          {
+            awaitingReply: ticketData!.awaitingReply,
+            waitingSince: ticketData!.waitingSince,
+          },
+          authorRole === "customer",
+          now
+        );
+    const firstResponseUpdate =
+      !isInternal && authorRole !== "customer" && !ticketData!.firstRespondedAt
+        ? { firstRespondedAt: now }
+        : {};
+
     await db
       .update(tickets)
-      .set({ updatedAt: now, ...awaitingUpdate })
+      .set({
+        updatedAt: now,
+        ...awaitingUpdate,
+        ...slaUpdate,
+        ...firstResponseUpdate,
+      })
       .where(eq(tickets.id, ticketId));
 
     await db.insert(ticketActivity).values({

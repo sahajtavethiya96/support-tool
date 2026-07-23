@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { ticketCustomFields } from "@/db/schema";
+import { audit } from "@/lib/audit";
 import { requireAdminFromRequest } from "@/lib/authz";
 import { CUSTOM_FIELD_TYPES, getCustomFields } from "@/lib/custom-fields";
 import { db } from "@/lib/db";
@@ -24,8 +25,9 @@ export async function GET(_request: NextRequest) {
 
 // POST — admin only
 export async function POST(request: NextRequest) {
+  let admin;
   try {
-    requireAdminFromRequest(request);
+    admin = requireAdminFromRequest(request);
   } catch (e) {
     return e as Response;
   }
@@ -116,6 +118,16 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     })
     .returning();
+
+  await audit({
+    action: "custom_field.created",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: `Created custom field "${label}"`,
+    entityId: inserted.id,
+    entityType: "custom_field",
+    metadata: { key, label, type, required: body.required ?? false },
+  });
 
   return NextResponse.json(inserted, { status: 201 });
 }

@@ -1,3 +1,4 @@
+import { APIError } from "better-auth/api";
 import { count, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
@@ -5,7 +6,10 @@ import { db } from "@/lib/db";
 import { user, session, account } from "@/db/schema";
 import { tickets } from "@/db/schema/tickets";
 import { ADMIN_ROLE, AGENT_ROLE } from "@/config/platform";
+import { auth } from "@/lib/auth";
+import { audit } from "@/lib/audit";
 import { requireAdminFromRequest } from "@/lib/authz";
+import { getPlatformSettings } from "@/lib/settings";
 
 async function getAdminCount() {
   const [{ total }] = await db
@@ -32,7 +36,12 @@ export async function PATCH(
     .limit(1);
   if (!target) return NextResponse.json({ error: "User not found." }, { status: 404 });
 
-  let body: { role?: string; banned?: boolean; banReason?: string } = {};
+  let body: {
+    role?: string;
+    banned?: boolean;
+    banReason?: string;
+    password?: string;
+  } = {};
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -59,6 +68,17 @@ export async function PATCH(
     }
 
     await db.update(user).set({ role: body.role, updatedAt: now }).where(eq(user.id, id));
+
+    await audit({
+      action: "user.role_updated",
+      actorEmail: adminUser.email,
+      actorId: adminUser.id,
+      description: `Role changed for ${target.email}: ${target.role} → ${body.role}`,
+      entityId: id,
+      entityType: "user",
+      metadata: { from: target.role, to: body.role, targetEmail: target.email },
+    });
+
     return NextResponse.json({ ok: true });
   }
 
@@ -83,6 +103,56 @@ export async function PATCH(
       await db.delete(session).where(eq(session.userId, id));
     }
 
+    await audit({
+      action: body.banned ? "user.banned" : "user.unbanned",
+      actorEmail: adminUser.email,
+      actorId: adminUser.id,
+      description: body.banned
+        ? `Banned ${target.email}${body.banReason ? `: ${body.banReason}` : ""}`
+        : `Unbanned ${target.email}`,
+      entityId: id,
+      entityType: "user",
+      metadata: { targetEmail: target.email, banReason: body.banned ? (body.banReason ?? null) : null },
+    });
+
+    return NextResponse.json({ ok: true });
+  }
+
+  // Admin-set password (no old password required)
+  if (body.password !== undefined) {
+    const settings = await getPlatformSettings();
+    if (!settings.passwordLoginEnabled) {
+      return NextResponse.json(
+        { error: "Password sign-in is disabled." },
+        { status: 403 }
+      );
+    }
+
+    try {
+      await auth.api.setUserPassword({
+        headers: request.headers,
+        body: { userId: id, newPassword: body.password },
+      });
+    } catch (e) {
+      if (e instanceof APIError) {
+        return NextResponse.json({ error: e.message }, { status: e.statusCode });
+      }
+      return NextResponse.json(
+        { error: "Failed to set password." },
+        { status: 500 }
+      );
+    }
+
+    await audit({
+      action: "user.password_set_by_admin",
+      actorEmail: adminUser.email,
+      actorId: adminUser.id,
+      description: `Password set for ${target.email} by ${adminUser.email}`,
+      entityId: id,
+      entityType: "user",
+      metadata: { targetEmail: target.email },
+    });
+
     return NextResponse.json({ ok: true });
   }
 
@@ -94,7 +164,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try { requireAdminFromRequest(request); } catch (e) { return e as Response; }
+  let adminUser;
+  try { adminUser = requireAdminFromRequest(request); } catch (e) { return e as Response; }
 
   const { id } = await params;
 
@@ -126,6 +197,16 @@ export async function DELETE(
   await db.delete(session).where(eq(session.userId, id));
   await db.delete(account).where(eq(account.userId, id));
   await db.delete(user).where(eq(user.id, id));
+
+  await audit({
+    action: "user.deleted",
+    actorEmail: adminUser.email,
+    actorId: adminUser.id,
+    description: `Deleted user ${target.email}`,
+    entityId: id,
+    entityType: "user",
+    metadata: { email: target.email, role: target.role },
+  });
 
   return NextResponse.json({ ok: true });
 }

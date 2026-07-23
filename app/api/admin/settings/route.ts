@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { platformSettings } from "@/db/schema/settings";
+import { audit } from "@/lib/audit";
 import { requireAdminFromRequest } from "@/lib/authz";
 import { db } from "@/lib/db";
 
@@ -46,8 +47,9 @@ export async function GET(_request: NextRequest) {
 // PATCH — admin only. Partial update: only fields present in the body are
 // changed, everything else keeps its current stored value.
 export async function PATCH(request: NextRequest) {
+  let admin;
   try {
-    requireAdminFromRequest(request);
+    admin = requireAdminFromRequest(request);
   } catch (e) {
     return e as Response;
   }
@@ -130,6 +132,23 @@ export async function PATCH(request: NextRequest) {
         updatedAt: now,
       },
     });
+
+  await audit({
+    action: "settings.updated",
+    actorEmail: admin.email,
+    actorId: admin.id,
+    description: "Updated platform settings",
+    entityId: "default",
+    entityType: "platform_settings",
+    metadata: {
+      theme,
+      appearanceMode,
+      passwordLoginEnabled,
+      magicLinkEnabled,
+      googleLoginEnabled,
+      brandName,
+    },
+  });
 
   return NextResponse.json({
     theme,

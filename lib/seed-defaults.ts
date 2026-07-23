@@ -1,10 +1,17 @@
 import { createId } from "@paralleldrive/cuid2";
 import {
+  slaPolicies,
   ticketCategories,
   ticketPriorities,
   ticketStatuses,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+
+// Fixed id so onConflictDoNothing() treats this as the same seed row across
+// repeated runs, same as the statuses/categories/priorities seeds below
+// (which are keyed by their unique `slug` instead — sla_policies has no
+// slug, so the row's own id is the natural dedup key here).
+const DEFAULT_SLA_POLICY_ID = "seed-default-sla-policy";
 
 /**
  * Seeds the default ticket statuses, categories, and priorities every install
@@ -110,13 +117,30 @@ export async function seedDefaults() {
     },
   ];
 
+  // One unscoped (Any priority / Any category) fallback policy, so a fresh
+  // install has working SLA display immediately. Admins can add scoped
+  // overrides and adjust these targets at /admin/ticket-config.
+  const slaPolicy = {
+    id: DEFAULT_SLA_POLICY_ID,
+    name: "Default SLA",
+    priority: null,
+    category: null,
+    firstResponseMinutes: 60,
+    nextResponseMinutes: 240,
+    resolutionMinutes: 1440,
+    isDefault: true,
+    sortOrder: 0,
+  };
+
   await db.insert(ticketStatuses).values(statuses).onConflictDoNothing();
   await db.insert(ticketCategories).values(categories).onConflictDoNothing();
   await db.insert(ticketPriorities).values(priorities).onConflictDoNothing();
+  await db.insert(slaPolicies).values(slaPolicy).onConflictDoNothing();
 
   return {
     statuses: statuses.length,
     categories: categories.length,
     priorities: priorities.length,
+    slaPolicies: 1,
   };
 }
