@@ -4,11 +4,11 @@ import {
   FileCodeIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { ScalarReference } from "@/components/common/scalar-reference";
 import { Button } from "@/components/ui/button";
 import { requireAdmin } from "@/lib/authz";
 import { env } from "@/lib/env";
 import { buildOpenApiSpec } from "@/lib/openapi-spec";
-import { ScalarReference } from "./_components/scalar-reference";
 
 export const metadata = { title: "API Docs" };
 
@@ -72,7 +72,7 @@ export default async function ApiDocsPage() {
       </div>
 
       <div className="flex-1">
-        <ScalarReference spec={spec} />
+        <ScalarReference preferredSecurityScheme="apiKey" spec={spec} />
       </div>
     </div>
   );

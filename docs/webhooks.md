@@ -6,7 +6,17 @@ Support Tool can POST a signed JSON payload to your own server when ticket event
 
 Delivery is async and durable: an event is queued (`webhook_deliveries` table), sent by a background worker (pg-boss, the same queue used for outbound email — see `lib/worker/`), and retried with backoff on failure. Nothing about creating, replying to, or closing a ticket ever blocks waiting on your server to respond.
 
-Manage endpoints at `/admin/webhooks` (admin role required).
+Manage endpoints at `/admin/webhooks` (admin role required). For an interactive, per-event reference (rendered by Scalar from `lib/webhooks-openapi-spec.ts`, the same pattern used for the [public API docs](./api.md)), see **View Docs** on that page, or go straight to `/admin/webhooks/docs`.
+
+---
+
+## Setting up a webhook
+
+1. Go to `/admin/webhooks` → **Add Webhook**.
+2. Fill in a name (just a label for your own reference), your endpoint's URL, and which events you want (Ticket Created, Replied, Closed, Reopened are pre-checked; status/category/priority/assignment changes are available but off by default).
+3. Click **Create**. A dialog shows the **signing secret** exactly once — copy it into your server's config now. Support Tool stores it encrypted and never displays it again; if you lose it, use **Rotate secret** to get a new one (this invalidates the old one).
+4. Click **Send test event** (paper-plane icon) to verify your endpoint before relying on real traffic.
+5. From then on, matching events POST to your URL automatically. Check the endpoint's **delivery history** (clock icon) any time — each attempt shows its status, HTTP response code, and a **Redeliver** button if it failed.
 
 ---
 

@@ -19,12 +19,17 @@ const ApiReferenceReact = dynamic(
 interface Props {
   /** The OpenAPI document (built server-side with this instance's base URL). */
   spec: Record<string, unknown>;
+  /** Security scheme key from the spec's `components.securitySchemes` to
+   * preselect in Scalar's "Test Request" panel — omit for specs with no
+   * testable request operations (e.g. a `webhooks`-only document). */
+  preferredSecurityScheme?: string;
 }
 
-// Renders the interactive API reference from the OpenAPI spec. Dark mode
+// Renders the interactive API reference from an OpenAPI spec. Dark mode
 // follows the admin ThemeProvider (Scalar's own toggle is hidden so the two
-// can't disagree).
-export function ScalarReference({ spec }: Props) {
+// can't disagree). Shared by every admin docs page — pass a different `spec`
+// per feature, nothing here is specific to any one of them.
+export function ScalarReference({ spec, preferredSecurityScheme }: Props) {
   const { appearanceMode } = useTheme();
   const [systemDark, setSystemDark] = React.useState(false);
 
@@ -48,9 +53,9 @@ export function ScalarReference({ spec }: Props) {
         // The page header already offers OpenAPI + Postman downloads —
         // Scalar's own download button would duplicate them.
         documentDownloadType: "none",
-        // The admin generates a key at /admin/api-keys and pastes it into the
-        // built-in client's auth field — same-origin requests, no CORS setup.
-        authentication: { preferredSecurityScheme: "apiKey" },
+        ...(preferredSecurityScheme
+          ? { authentication: { preferredSecurityScheme } }
+          : {}),
       }}
     />
   );

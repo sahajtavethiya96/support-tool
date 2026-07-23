@@ -2,6 +2,7 @@
 
 import {
   ArrowsClockwiseIcon,
+  BookOpenIcon,
   CheckIcon,
   ClockCounterClockwiseIcon,
   CopyIcon,
@@ -12,6 +13,7 @@ import {
   WarningCircleIcon,
   WebhooksLogoIcon,
 } from "@phosphor-icons/react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -284,14 +286,27 @@ export function WebhooksManager({ initialWebhooks }: Props) {
             happen.
           </p>
         </div>
-        <Button
-          className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-md gap-1.5"
-          onClick={openAdd}
-          size="sm"
-        >
-          <PlusIcon className="size-4" />
-          Add Webhook
-        </Button>
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <Button
+            asChild
+            className="border-border text-foreground hover:bg-accent rounded-md gap-1.5"
+            size="sm"
+            variant="outline"
+          >
+            <Link href="/admin/webhooks/docs">
+              <BookOpenIcon className="size-4" />
+              View Docs
+            </Link>
+          </Button>
+          <Button
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-md gap-1.5"
+            onClick={openAdd}
+            size="sm"
+          >
+            <PlusIcon className="size-4" />
+            Add Webhook
+          </Button>
+        </div>
       </div>
 
       <div className="bg-card rounded-xl border border-border shadow-soft overflow-hidden">
